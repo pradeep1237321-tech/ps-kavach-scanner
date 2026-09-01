@@ -1,0 +1,361 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+
+<meta name="theme-color" content="#B12B36">
+
+<title>PS Kavach | Attendance Scanner</title>
+
+<script src="https://unpkg.com/html5-qrcode" defer></script>
+
+<style>
+
+:root{--paper:#FBF6F2;--surface:#fff;--surface2:#F6EEE8;--ink:#2A171A;--muted:#7A6B6D;--line:#EADFD8;--line2:#E0D2C8;--brand:#B12B36;--brand-deep:#8E1F29;--gold:#B98A34;--good:#1F8A5B;--good-soft:#E3F3EB;--danger:#CE3B3B;--danger-soft:#FBE6E4}
+
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+
+.top{display:flex;align-items:center;gap:10px;padding:13px 16px;background:linear-gradient(115deg,var(--brand-deep),var(--brand));color:#fff;position:sticky;top:0;z-index:20}
+
+.g{width:34px;height:34px;border-radius:10px;background:#ffffff26;display:grid;place-items:center;font-weight:800;font-size:20px}.top b{display:block;font-size:17px}.top span{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.9}.who{margin-left:auto;font-size:12px}
+
+.wrap{max-width:560px;margin:auto;padding:14px}.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 7px 20px -15px #2a171a55}
+
+label{font-size:12px;font-weight:700;display:block;margin:9px 0 5px}input,select{width:100%;padding:12px;border:1px solid var(--line2);border-radius:11px;background:#fff;color:var(--ink);font:inherit}
+
+button{font:inherit}.btn{border:0;border-radius:12px;padding:13px 16px;font-weight:800;width:100%;cursor:pointer}.primary{background:linear-gradient(150deg,var(--brand),var(--brand-deep));color:#fff}.secondary{background:var(--surface2);border:1px solid var(--line2);color:var(--ink)}
+
+.row{display:flex;gap:9px}.row>*{flex:1}.mut{color:var(--muted);font-size:12.5px}.hint{font-size:12px;color:var(--muted);margin-top:7px}
+
+.seg{display:flex;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:3px;margin-bottom:12px}.seg button{flex:1;border:0;background:transparent;padding:10px;border-radius:9px;font-weight:800;color:var(--muted)}.seg .on{background:#fff;color:var(--brand);box-shadow:0 2px 6px -3px #0005}
+
+#reader{width:100%;overflow:hidden;border-radius:15px;background:#111;min-height:300px}#reader video{border-radius:15px}
+
+.scanbox{position:relative}.scanbox:after{content:"";position:absolute;inset:18%;border:3px solid #fff9;border-radius:16px;pointer-events:none}
+
+.notice{background:#fff7df;border:1px solid #ecd79d;border-radius:12px;padding:11px;font-size:12.5px;margin-top:10px;display:none}.err{background:var(--danger-soft);border:1px solid #f2c9c6;color:var(--brand-deep);border-radius:12px;padding:11px;font-size:13px;font-weight:650;margin-top:10px;display:none}
+
+.result{display:none;border-radius:16px;padding:17px;text-align:center;margin-bottom:14px}.ok{background:var(--good-soft);border:1px solid #bfe6cf}.bad{background:var(--danger-soft);border:1px solid #f2c9c6}.result .ico{font-size:32px}.result h2{margin:5px 0 2px;font-size:20px}.result .sub{color:var(--muted);font-size:13px}
+
+.recent .r{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);gap:8px}.pill{font-size:11px;font-weight:800;padding:3px 9px;border-radius:99px;background:var(--good-soft);color:var(--good)}
+
+#app{display:none}.loading{text-align:center;padding:22px;color:var(--muted)}.smallbtn{margin-top:9px}.footer{text-align:center;color:#c3b4ae;font-size:8px;letter-spacing:.14em;text-transform:uppercase;padding:8px}
+
+</style>
+
+</head>
+
+<body>
+
+<header class="top"><div class="g">क</div><div><b>PS Kavach</b><span>Attendance Scanner</span></div><div class="who" id="who"></div></header>
+
+<div class="wrap" id="gate">
+
+  <div class="card">
+
+    <h2>Faculty sign-in</h2>
+
+    <p class="mut">Enter your attendance PIN and name.</p>
+
+    <label>Your name</label><input id="name" autocomplete="name" placeholder="e.g. Prof. Sharma">
+
+    <label>Attendance PIN</label><input id="pin" inputmode="numeric" autocomplete="off" placeholder="••••">
+
+    <div class="err" id="gateErr"></div>
+
+    <button class="btn primary" id="sign" onclick="signIn()">Sign in</button>
+
+  </div>
+
+</div>
+
+<div class="wrap" id="app">
+
+  <div class="card">
+
+    <label>Marking attendance for</label><select id="test"></select>
+
+    <div class="row"><div><label>Batch</label><select id="batch"><option value="">All</option></select></div><div><label>Division</label><select id="div"><option value="">All</option></select></div></div>
+
+    <label>Specialisation</label><select id="spec"><option value="">All</option></select>
+
+    <div class="hint" id="live"></div>
+
+  </div>
+
+  <div class="result" id="result"></div>
+
+  <div class="seg"><button id="scanTab" class="on" onclick="setMode('scan')">📷 Scan QR</button><button id="manualTab" onclick="setMode('manual')">⌨ Manual</button></div>
+
+  <div class="card" id="scanCard">
+
+    <div class="scanbox"><div id="reader"></div></div>
+
+    <div class="hint" id="scanHint">Tap Start scanner. Allow camera access when Chrome asks.</div>
+
+    <div class="notice" id="browserNotice"><b>Camera permission is required.</b><br>If this page was opened inside WhatsApp, choose <b>Open in Chrome</b> and then tap Start scanner.</div>
+
+    <div class="err" id="scanErr"></div>
+
+    <div style="margin-top:10px"><button class="btn primary" id="camBtn" onclick="startScanner()">Start scanner</button></div>
+
+    <button class="btn secondary smallbtn" onclick="stopScanner()">Stop scanner</button>
+
+  </div>
+
+  <div class="card" id="manualCard" style="display:none">
+
+    <label>Student ERP</label><input id="erp" inputmode="numeric" placeholder="26700…" autocomplete="off">
+
+    <button class="btn primary" style="margin-top:12px" onclick="markManual()">Mark present</button>
+
+  </div>
+
+  <div class="card">
+
+    <div style="display:flex;justify-content:space-between"><b>Recent</b><span class="mut" id="count">0 marked</span></div>
+
+    <div class="recent" id="recent"><div class="mut" style="margin-top:8px">No scans yet.</div></div>
+
+  </div>
+
+  <button class="btn secondary" onclick="signOut()">Sign out</button>
+
+</div>
+
+<div class="footer">PS CREATION</div>
+
+<script>
+
+const API="https://script.google.com/macros/s/AKfycbzG06nNZEsK4jhDLL-BVetZ1TBysvelgV0ZEE47tpAq_iFGxjmZdgJVfY9yY3TiTyZb/exec";
+
+let PIN="",NAME="",CTX=null,scanner=null,scanning=false,last={},recent=[],nmark=0;
+
+function enc(v){return encodeURIComponent(v==null?"":String(v));}
+
+function jsonp(params){
+
+  return new Promise((resolve,reject)=>{
+
+    const cb="psk_cb_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+
+    const s=document.createElement("script");
+
+    const q=Object.keys(params).map(k=>enc(k)+"="+enc(params[k])).join("&");
+
+    s.src=API+"?"+q+"&callback="+cb;
+
+    const timer=setTimeout(()=>{cleanup();reject(new Error("Server timeout"));},15000);
+
+    window[cb]=data=>{clearTimeout(timer);cleanup();resolve(data);};
+
+    s.onerror=()=>{clearTimeout(timer);cleanup();reject(new Error("Could not reach attendance server"));};
+
+    function cleanup(){delete window[cb];s.remove();}
+
+    document.head.appendChild(s);
+
+  });
+
+}
+
+function isInApp(){return /FBAN|FBAV|Instagram|Line|Twitter|WhatsApp/i.test(navigator.userAgent);}
+
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v);}catch(e){return null;}}
+
+function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display="block";}
+
+function clearErr(id){const e=document.getElementById(id);e.textContent="";e.style.display="none";}
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+function beep(ok){try{const A=window.AudioContext||window.webkitAudioContext,a=new A(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=ok?880:220;g.gain.value=.07;o.start();setTimeout(()=>{o.stop();a.close()},ok?120:250)}catch(e){}}
+
+function vib(x){try{navigator.vibrate&&navigator.vibrate(x)}catch(e){}}
+
+async function signIn(silent=false){
+
+  const pin=document.getElementById("pin").value.trim(),name=document.getElementById("name").value.trim();
+
+  if(!pin||!name){if(!silent)showErr("gateErr","Enter your name and PIN.");return;}
+
+  const b=document.getElementById("sign");b.disabled=true;b.textContent="Checking…";clearErr("gateErr");
+
+  try{
+
+    const r=await jsonp({api:"scanContext",pin});
+
+    if(!r.ok){showErr("gateErr",r.pinSet?"Wrong PIN. Ask your admin.":"Attendance is not enabled yet.");return;}
+
+    PIN=pin;NAME=name;CTX=r;ls("psk_pin",pin);ls("psk_name",name);
+
+    document.getElementById("who").textContent=name;document.getElementById("gate").style.display="none";document.getElementById("app").style.display="block";
+
+    buildFilters();renderTests();
+
+    if(isInApp())document.getElementById("browserNotice").style.display="block";
+
+  }catch(e){showErr("gateErr",e.message||"Network error");}
+
+  finally{b.disabled=false;b.textContent="Sign in";}
+
+}
+
+function buildFilters(){
+
+  fill("batch",CTX.dims&&CTX.dims.batches);fill("div",CTX.dims&&CTX.dims.divisions);fill("spec",CTX.dims&&CTX.dims.specs);
+
+}
+
+function fill(id,arr){const s=document.getElementById(id);s.innerHTML='<option value="">All</option>'+(arr||[]).map(x=>"<option>"+esc(x)+"</option>").join("");}
+
+function renderTests(){
+
+  const ba=document.getElementById("batch").value,dv=document.getElementById("div").value,sp=document.getElementById("spec").value;
+
+  const live=(CTX.liveTests||[]).filter(t=>(!ba||t.batch===ba||t.batch==="All")&&(!dv||t.division===dv||t.division==="All")&&(!sp||t.spec===sp||t.spec==="All"));
+
+  let o='<option value="MASTER">★ Master — mark in ALL live tests</option>';
+
+  o+=live.map(t=>{const meta=[t.program,t.batch,t.division,t.spec].filter(x=>x&&x!=="All").join(" · ");return '<option value="'+esc(t.id)+'">'+esc(t.title)+(meta?" — "+esc(meta):"")+"</option>"}).join("");
+
+  document.getElementById("test").innerHTML=o;document.getElementById("live").textContent=live.length+" live test"+(live.length===1?"":"s")+" right now.";
+
+}
+
+["batch","div","spec"].forEach(id=>document.getElementById(id).addEventListener("change",renderTests));
+
+function setMode(m){
+
+  document.getElementById("scanTab").classList.toggle("on",m==="scan");document.getElementById("manualTab").classList.toggle("on",m==="manual");
+
+  document.getElementById("scanCard").style.display=m==="scan"?"block":"none";document.getElementById("manualCard").style.display=m==="manual"?"block":"none";
+
+  if(m!=="scan")stopScanner();
+
+}
+
+async function startScanner(){
+
+  clearErr("scanErr");
+
+  if(!window.isSecureContext){showErr("scanErr","Camera requires HTTPS. Open this scanner from its HTTPS address.");return;}
+
+  if(typeof Html5Qrcode==="undefined"){showErr("scanErr","QR scanner library is still loading. Wait a moment and try again.");return;}
+
+  if(scanning)return;
+
+  scanner=new Html5Qrcode("reader");
+
+  document.getElementById("scanHint").textContent="Starting rear camera…";
+
+  try{
+
+    const cams=await Html5Qrcode.getCameras();
+
+    if(!cams||!cams.length)throw new Error("No camera was found.");
+
+    const rear=cams.find(c=>/back|rear|environment|world/i.test(c.label))||cams[cams.length-1];
+
+    await scanner.start({deviceId:{exact:rear.id}},{fps:12,qrbox:(w,h)=>{const s=Math.floor(Math.min(w,h)*.68);return {width:s,height:s}},aspectRatio:1},onDecoded,()=>{});
+
+    scanning=true;document.getElementById("camBtn").textContent="Scanner running";document.getElementById("camBtn").disabled=true;
+
+    document.getElementById("scanHint").textContent="Point the rear camera at the student's Attendance QR.";
+
+  }catch(e){
+
+    stopScanner();const n=String(e&&e.name||"");
+
+    if(n==="NotAllowedError"||/permission|denied/i.test(String(e)))showErr("scanErr","Camera permission was denied. In Chrome, open Site settings → Camera → Allow, then reload this page.");
+
+    else showErr("scanErr","Camera could not start. "+(e.message||e));
+
+  }
+
+}
+
+async function stopScanner(){
+
+  if(scanner){try{if(scanning)await scanner.stop();}catch(e){}try{scanner.clear()}catch(e){}}
+
+  scanner=null;scanning=false;const b=document.getElementById("camBtn");b.textContent="Start scanner";b.disabled=false;
+
+}
+
+async function onDecoded(text){
+
+  const erp=extractErp(text);if(!erp)return;
+
+  const now=Date.now();if(last[erp]&&now-last[erp]<3500)return;last[erp]=now;
+
+  await stopScanner();document.getElementById("scanHint").textContent="QR detected. Marking attendance…";await doMark(erp);
+
+  setTimeout(()=>{if(document.getElementById("scanCard").style.display!=="none")startScanner()},700);
+
+}
+
+function extractErp(text){
+
+  const raw=String(text||"").trim();if(!raw)return "";
+
+  if(/^\d{4,}$/.test(raw))return raw;
+
+  try{const u=new URL(raw);for(const k of ["erp","erpId","erp_id","studentErp","student_id","id"]){const v=u.searchParams.get(k);if(v)return v.trim();}}catch(e){}
+
+  try{const o=JSON.parse(raw);for(const k of ["erp","erpId","erp_id","studentErp","student_id","id"]){if(o&&o[k]!=null)return String(o[k]).trim();}}catch(e){}
+
+  return raw;
+
+}
+
+async function markManual(){const erp=document.getElementById("erp").value.trim();if(!erp)return;document.getElementById("erp").value="";await doMark(erp);}
+
+async function doMark(erp){
+
+  try{
+
+    const r=await jsonp({api:"scanMark",pin:PIN,testId:document.getElementById("test").value,erp,name:NAME});
+
+    showResult(r);if(r.ok){beep(true);vib(60)}else{beep(false);vib([60,40,60])}
+
+  }catch(e){showResult({ok:false,name:erp,msg:e.message||"Network error"});beep(false)}
+
+}
+
+function showResult(r){
+
+  const el=document.getElementById("result");el.className="result "+(r.ok?"ok":"bad");el.style.display="block";
+
+  if(r.ok){
+
+    const tags=[r.program,r.batch,r.division,r.spec].filter(Boolean).join(" · ");
+
+    el.innerHTML='<div class="ico">✅</div><h2>'+esc(r.name)+'</h2><div class="sub">ERP '+esc(r.erp)+' · marked present in '+esc(r.marked)+' test'+(r.marked===1?"":"s")+(tags?"<br>"+esc(tags):"")+"</div>";
+
+    nmark++;document.getElementById("count").textContent=nmark+" marked";recent.unshift({name:r.name,erp:r.erp,n:r.marked});if(recent.length>20)recent.pop();drawRecent();
+
+  }else el.innerHTML='<div class="ico">⚠️</div><h2>'+esc(r.name||"Not marked")+'</h2><div class="sub">'+esc(r.msg||"Could not mark")+"</div>";
+
+}
+
+function drawRecent(){document.getElementById("recent").innerHTML=recent.map(x=>'<div class="r"><span><b>'+esc(x.name)+'</b> <span class="mut">'+esc(x.erp)+'</span></span><span class="pill">'+esc(x.n)+'✓</span></div>').join("")||'<div class="mut" style="margin-top:8px">No scans yet.</div>'}
+
+function signOut(){ls("psk_pin","");ls("psk_name","");stopScanner();location.reload()}
+
+document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")signIn()});
+
+document.getElementById("erp").addEventListener("keydown",e=>{if(e.key==="Enter")markManual()});
+
+window.addEventListener("load",()=>{const p=ls("psk_pin"),n=ls("psk_name");if(p&&n){document.getElementById("pin").value=p;document.getElementById("name").value=n;signIn(true)}});
+
+</script>
+
+</body>
+
+</html>
