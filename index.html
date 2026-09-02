@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -8,26 +7,37 @@
 <title>PS Kavach | Attendance Scanner</title>
 <script src="https://unpkg.com/html5-qrcode" defer></script>
 <style>
-:root{--paper:#FBF6F2;--surface:#fff;--surface2:#F6EEE8;--ink:#2A171A;--muted:#7A6B6D;--line:#EADFD8;--line2:#E0D2C8;--brand:#B12B36;--brand-deep:#8E1F29;--gold:#B98A34;--good:#1F8A5B;--good-soft:#E3F3EB;--danger:#CE3B3B;--danger-soft:#FBE6E4}
+:root{--paper:#FBF6F2;--surface:#fff;--surface2:#F6EEE8;--ink:#2A171A;--muted:#7A6B6D;--line:#EADFD8;--line2:#E0D2C8;--brand:#B12B36;--brand-deep:#8E1F29;--gold:#B98A34;--good:#1F8A5B;--good-soft:#E3F3EB;--warn:#B98A34;--warn-soft:#FBF1DD;--danger:#CE3B3B;--danger-soft:#FBE6E4}
 *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .top{display:flex;align-items:center;gap:10px;padding:13px 16px;background:linear-gradient(115deg,var(--brand-deep),var(--brand));color:#fff;position:sticky;top:0;z-index:20}
-.g{width:34px;height:34px;border-radius:10px;background:#ffffff26;display:grid;place-items:center;font-weight:800;font-size:20px}.top b{display:block;font-size:17px}.top span{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.9}.who{margin-left:auto;font-size:12px}
+.g{width:34px;height:34px;border-radius:10px;background:#ffffff26;display:grid;place-items:center;font-weight:800;font-size:20px}.top b{display:block;font-size:17px}.top span{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.9}.who{margin-left:auto;font-size:12px;text-align:right}
 .wrap{max-width:560px;margin:auto;padding:14px}.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 7px 20px -15px #2a171a55}
 label{font-size:12px;font-weight:700;display:block;margin:9px 0 5px}input,select{width:100%;padding:12px;border:1px solid var(--line2);border-radius:11px;background:#fff;color:var(--ink);font:inherit}
-button{font:inherit}.btn{border:0;border-radius:12px;padding:13px 16px;font-weight:800;width:100%;cursor:pointer}.primary{background:linear-gradient(150deg,var(--brand),var(--brand-deep));color:#fff}.secondary{background:var(--surface2);border:1px solid var(--line2);color:var(--ink)}
+button{font:inherit}.btn{border:0;border-radius:12px;padding:13px 16px;font-weight:800;width:100%;cursor:pointer}.primary{background:linear-gradient(150deg,var(--brand),var(--brand-deep));color:#fff}.secondary{background:var(--surface2);border:1px solid var(--line2);color:var(--ink)}.btn:disabled{opacity:.55;cursor:default}
 .row{display:flex;gap:9px}.row>*{flex:1}.mut{color:var(--muted);font-size:12.5px}.hint{font-size:12px;color:var(--muted);margin-top:7px}
 .seg{display:flex;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:3px;margin-bottom:12px}.seg button{flex:1;border:0;background:transparent;padding:10px;border-radius:9px;font-weight:800;color:var(--muted)}.seg .on{background:#fff;color:var(--brand);box-shadow:0 2px 6px -3px #0005}
-#reader{width:100%;overflow:hidden;border-radius:15px;background:#111;min-height:300px}#reader video{border-radius:15px}
-.scanbox{position:relative}.scanbox:after{content:"";position:absolute;inset:18%;border:3px solid #fff9;border-radius:16px;pointer-events:none}
+#reader{width:100%;overflow:hidden;border-radius:15px;background:#111;min-height:300px}#reader video{border-radius:15px;width:100%!important;display:block}
+#reader img[alt="Info icon"]{display:none}
+.scanbox{position:relative}
+.scanbox .frame{position:absolute;inset:16%;border:3px solid #ffffffcc;border-radius:16px;pointer-events:none;box-shadow:0 0 0 100vmax #00000040;transition:border-color .15s,box-shadow .15s}
+.scanbox.hit .frame{border-color:#5bffa6}.scanbox.miss .frame{border-color:#ff7d7d}
+.livedot{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;background:#00000066;color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:99px;pointer-events:none}
+.livedot i{width:8px;height:8px;border-radius:99px;background:#ff5b5b;display:inline-block}.livedot.on i{background:#4ade80;animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .notice{background:#fff7df;border:1px solid #ecd79d;border-radius:12px;padding:11px;font-size:12.5px;margin-top:10px;display:none}.err{background:var(--danger-soft);border:1px solid #f2c9c6;color:var(--brand-deep);border-radius:12px;padding:11px;font-size:13px;font-weight:650;margin-top:10px;display:none}
-.result{display:none;border-radius:16px;padding:17px;text-align:center;margin-bottom:14px}.ok{background:var(--good-soft);border:1px solid #bfe6cf}.bad{background:var(--danger-soft);border:1px solid #f2c9c6}.result .ico{font-size:32px}.result h2{margin:5px 0 2px;font-size:20px}.result .sub{color:var(--muted);font-size:13px}
-.recent .r{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);gap:8px}.pill{font-size:11px;font-weight:800;padding:3px 9px;border-radius:99px;background:var(--good-soft);color:var(--good)}
-#app{display:none}.loading{text-align:center;padding:22px;color:var(--muted)}.smallbtn{margin-top:9px}.footer{text-align:center;color:#c3b4ae;font-size:8px;letter-spacing:.14em;text-transform:uppercase;padding:8px}
+.result{display:none;border-radius:16px;padding:17px;text-align:center;margin-bottom:14px;animation:pop .18s ease}.ok{background:var(--good-soft);border:1px solid #bfe6cf}.dupe{background:var(--warn-soft);border:1px solid #ecd79d}.bad{background:var(--danger-soft);border:1px solid #f2c9c6}.result .ico{font-size:34px;line-height:1}.result h2{margin:5px 0 2px;font-size:21px}.result .sub{color:var(--muted);font-size:13px}
+@keyframes pop{from{transform:scale(.96);opacity:.4}to{transform:scale(1);opacity:1}}
+.recent .r{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);gap:8px}.recent .r:last-child{border-bottom:0}.pill{font-size:11px;font-weight:800;padding:3px 9px;border-radius:99px;background:var(--good-soft);color:var(--good);white-space:nowrap}.pill.warn{background:var(--warn-soft);color:var(--warn)}
+#app{display:none}.footer{text-align:center;color:#c3b4ae;font-size:8px;letter-spacing:.14em;text-transform:uppercase;padding:8px}
+.togglebar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}
+.switch{position:relative;width:46px;height:26px;flex:0 0 auto}.switch input{display:none}.slider{position:absolute;inset:0;background:var(--line2);border-radius:99px;transition:.2s}.slider:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:99px;transition:.2s;box-shadow:0 1px 3px #0004}.switch input:checked+.slider{background:var(--good)}.switch input:checked+.slider:before{transform:translateX(20px)}
+.bigcount{display:flex;align-items:baseline;gap:6px}.bigcount b{font-size:26px;color:var(--brand)}
 </style>
 </head>
 <body>
 <header class="top"><div class="g">क</div><div><b>PS Kavach</b><span>Attendance Scanner</span></div><div class="who" id="who"></div></header>
 
+<!-- ============ SIGN IN ============ -->
 <div class="wrap" id="gate">
   <div class="card">
     <h2>Faculty sign-in</h2>
@@ -39,6 +49,7 @@ button{font:inherit}.btn{border:0;border-radius:12px;padding:13px 16px;font-weig
   </div>
 </div>
 
+<!-- ============ APP ============ -->
 <div class="wrap" id="app">
   <div class="card">
     <label>Marking attendance for</label><select id="test"></select>
@@ -51,123 +62,138 @@ button{font:inherit}.btn{border:0;border-radius:12px;padding:13px 16px;font-weig
 
   <div class="seg"><button id="scanTab" class="on" onclick="setMode('scan')">📷 Scan QR</button><button id="manualTab" onclick="setMode('manual')">⌨ Manual</button></div>
 
+  <!-- SCAN -->
   <div class="card" id="scanCard">
-    <div class="scanbox"><div id="reader"></div></div>
-    <div class="hint" id="scanHint">Tap Start scanner. Allow camera access when Chrome asks.</div>
-    <div class="notice" id="browserNotice"><b>Camera permission is required.</b><br>If this page was opened inside WhatsApp, choose <b>Open in Chrome</b> and then tap Start scanner.</div>
+    <label id="camLabel" style="display:none">Camera</label>
+    <select id="camSelect" style="display:none;margin-bottom:10px" onchange="switchCamera()"></select>
+
+    <div class="scanbox" id="scanbox">
+      <div id="reader"></div>
+      <div class="frame"></div>
+      <div class="livedot" id="livedot"><i></i><span id="liveTxt">Camera off</span></div>
+    </div>
+
+    <div class="hint" id="scanHint">Tap <b>Start scanner</b> and allow camera access. Scanning runs continuously — no need to press anything between students.</div>
+    <div class="notice" id="browserNotice"><b>Camera permission is required.</b><br>If this page was opened inside WhatsApp/Instagram, choose <b>Open in Chrome</b>, then tap Start scanner.</div>
     <div class="err" id="scanErr"></div>
-    <div style="margin-top:10px"><button class="btn primary" id="camBtn" onclick="startScanner()">Start scanner</button></div>
-    <button class="btn secondary smallbtn" onclick="stopScanner()">Stop scanner</button>
+
+    <div style="margin-top:10px"><button class="btn primary" id="camBtn" onclick="toggleScanner()">Start scanner</button></div>
+
+    <div class="togglebar">
+      <span class="mut">🔊 Beep on scan</span>
+      <label class="switch"><input type="checkbox" id="soundToggle" checked><span class="slider"></span></label>
+    </div>
   </div>
 
+  <!-- MANUAL -->
   <div class="card" id="manualCard" style="display:none">
     <label>Student ERP</label><input id="erp" inputmode="numeric" placeholder="26700…" autocomplete="off">
     <button class="btn primary" style="margin-top:12px" onclick="markManual()">Mark present</button>
   </div>
 
+  <!-- RECENT -->
   <div class="card">
-    <div style="display:flex;justify-content:space-between"><b>Recent</b><span class="mut" id="count">0 marked</span></div>
-    <div class="recent" id="recent"><div class="mut" style="margin-top:8px">No scans yet.</div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="bigcount"><b id="count">0</b><span class="mut">marked this session</span></div>
+      <button class="btn secondary" style="width:auto;padding:8px 14px" onclick="clearRecent()">Clear</button>
+    </div>
+    <div class="recent" id="recent" style="margin-top:8px"><div class="mut">No scans yet.</div></div>
   </div>
+
   <button class="btn secondary" onclick="signOut()">Sign out</button>
 </div>
 <div class="footer">PS CREATION</div>
 
 <script>
+/* ====================================================================
+   PS KAVACH — Attendance Scanner (GitHub Pages front-end)
+   Camera stays here; server calls go through hidden Apps Script iframe.
+   ==================================================================== */
 const API="https://script.google.com/macros/s/AKfycbzG06nNZEsK4jhDLL-BVetZ1TBysvelgV0ZEE47tpAq_iFGxjmZdgJVfY9yY3TiTyZb/exec";
-let PIN="",NAME="",CTX=null,scanner=null,scanning=false,last={},recent=[],nmark=0;
 
-function enc(v){return encodeURIComponent(v==null?"":String(v));}
+let PIN="",NAME="",CTX=null;
+let scanner=null,scanning=false,starting=false;
+let cameras=[],currentCamId=null;
+let last={},recent=[],nmark=0;
+let busy=false;                 // true while a mark request is in-flight (pauses accepting new QRs)
+
+/* ---------- audio: unlock once so beeps are instant & reliable (laptop + phone) ---------- */
+let AC=null;
+function ensureAudio(){
+  try{
+    if(!AC){const A=window.AudioContext||window.webkitAudioContext;if(A)AC=new A();}
+    if(AC&&AC.state==="suspended")AC.resume();
+  }catch(e){}
+}
+function tone(freq,dur,type,vol){
+  if(!document.getElementById("soundToggle").checked)return;
+  try{
+    ensureAudio();if(!AC)return;
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type=type||"sine";o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001,AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol||0.18,AC.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+dur);
+    o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+dur+0.02);
+  }catch(e){}
+}
+function beepOK(){ tone(880,0.13,"sine",0.2); setTimeout(()=>tone(1320,0.11,"sine",0.18),90); } // pleasant two-note "ding"
+function beepDupe(){ tone(520,0.14,"triangle",0.16); }                                       // soft single mid tone
+function beepFail(){ tone(200,0.28,"square",0.14); }                                          // low buzz
+function vib(x){try{navigator.vibrate&&navigator.vibrate(x)}catch(e){}}
+
+/* ---------- hidden Apps Script bridge (unchanged mechanism) ---------- */
 let bridgeFrame=null,bridgeReady=false,bridgeSeq=0,bridgePending={},bridgeWaiters=[];
-
 function initBridge(){
   return new Promise((resolve,reject)=>{
     if(bridgeReady){resolve();return;}
     bridgeWaiters.push({resolve,reject});
     if(bridgeFrame)return;
-
     const f=document.createElement("iframe");
-    f.id="pskBridge";
-    f.src=API+"?page=scanBridge";
-    f.title="PS Kavach server bridge";
+    f.id="pskBridge";f.src=API+"?page=scanBridge";f.title="PS Kavach server bridge";
     f.style.cssText="position:fixed;width:1px;height:1px;border:0;opacity:0;pointer-events:none;left:-10px;top:-10px";
-    document.body.appendChild(f);
-    bridgeFrame=f;
-
+    document.body.appendChild(f);bridgeFrame=f;
     setTimeout(()=>{
       if(!bridgeReady){
-        const pending=bridgeWaiters.splice(0);
-        pending.forEach(x=>x.reject(new Error("Could not connect to attendance server. Please refresh and try again.")));
-        bridgeFrame=null;
-        try{f.remove()}catch(e){}
+        bridgeWaiters.splice(0).forEach(x=>x.reject(new Error("Could not connect to attendance server. Refresh and try again.")));
+        bridgeFrame=null;try{f.remove()}catch(e){}
       }
     },20000);
   });
 }
-
 window.addEventListener("message",e=>{
-  if(e.data&&e.data.type==="PSK_BRIDGE_READY"){
-    bridgeReady=true;
-    bridgeWaiters.splice(0).forEach(x=>x.resolve());
-    return;
-  }
-
+  if(e.data&&e.data.type==="PSK_BRIDGE_READY"){bridgeReady=true;bridgeWaiters.splice(0).forEach(x=>x.resolve());return;}
   if(!e.data||e.data.type!=="PSK_BRIDGE_RES")return;
-  const p=bridgePending[e.data.id];
-  if(!p)return;
-
-  delete bridgePending[e.data.id];
-  clearTimeout(p.timer);
-
-  if(e.data.ok)p.resolve(e.data.data);
-  else p.reject(new Error(e.data.error||"Attendance server error"));
+  const p=bridgePending[e.data.id];if(!p)return;
+  delete bridgePending[e.data.id];clearTimeout(p.timer);
+  if(e.data.ok)p.resolve(e.data.data);else p.reject(new Error(e.data.error||"Attendance server error"));
 });
-
 function bridgeCall(action,data){
   return initBridge().then(()=>new Promise((resolve,reject)=>{
     const id="psk_"+(++bridgeSeq)+"_"+Date.now();
-    const timer=setTimeout(()=>{
-      delete bridgePending[id];
-      reject(new Error("Attendance server timed out. Please try again."));
-    },20000);
-
+    const timer=setTimeout(()=>{delete bridgePending[id];reject(new Error("Attendance server timed out. Please try again."));},20000);
     bridgePending[id]={resolve,reject,timer};
-
-    bridgeFrame.contentWindow.postMessage({
-      type:"PSK_BRIDGE_REQ",
-      id:id,
-      action:action,
-      data:data||{}
-    },"*");
+    bridgeFrame.contentWindow.postMessage({type:"PSK_BRIDGE_REQ",id,action,data:data||{}},"*");
   }));
 }
-
 function jsonp(params){
-  if(params.api==="scanContext"){
-    return bridgeCall("context",{pin:params.pin});
-  }
-
-  if(params.api==="scanMark"){
-    return bridgeCall("mark",{
-      pin:params.pin,
-      testId:params.testId,
-      erp:params.erp,
-      name:params.name
-    });
-  }
-
+  if(params.api==="scanContext")return bridgeCall("context",{pin:params.pin});
+  if(params.api==="scanMark")return bridgeCall("mark",{pin:params.pin,testId:params.testId,erp:params.erp,name:params.name});
   return Promise.reject(new Error("Unknown attendance request"));
 }
 
+/* ---------- small helpers ---------- */
 function isInApp(){return /FBAN|FBAV|Instagram|Line|Twitter|WhatsApp/i.test(navigator.userAgent);}
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v);}catch(e){return null;}}
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display="block";}
 function clearErr(id){const e=document.getElementById(id);e.textContent="";e.style.display="none";}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
-function beep(ok){try{const A=window.AudioContext||window.webkitAudioContext,a=new A(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=ok?880:220;g.gain.value=.07;o.start();setTimeout(()=>{o.stop();a.close()},ok?120:250)}catch(e){}}
-function vib(x){try{navigator.vibrate&&navigator.vibrate(x)}catch(e){}}
+function setLive(on,txt){const d=document.getElementById("livedot");d.classList.toggle("on",!!on);document.getElementById("liveTxt").textContent=txt;}
+function flash(cls){const b=document.getElementById("scanbox");b.classList.remove("hit","miss");void b.offsetWidth;b.classList.add(cls);setTimeout(()=>b.classList.remove(cls),450);}
 
+/* ---------- sign in ---------- */
 async function signIn(silent=false){
+  ensureAudio();
   const pin=document.getElementById("pin").value.trim(),name=document.getElementById("name").value.trim();
   if(!pin||!name){if(!silent)showErr("gateErr","Enter your name and PIN.");return;}
   const b=document.getElementById("sign");b.disabled=true;b.textContent="Checking…";clearErr("gateErr");
@@ -175,60 +201,121 @@ async function signIn(silent=false){
     const r=await jsonp({api:"scanContext",pin});
     if(!r.ok){showErr("gateErr",r.pinSet?"Wrong PIN. Ask your admin.":"Attendance is not enabled yet.");return;}
     PIN=pin;NAME=name;CTX=r;ls("psk_pin",pin);ls("psk_name",name);
-    document.getElementById("who").textContent=name;document.getElementById("gate").style.display="none";document.getElementById("app").style.display="block";
+    document.getElementById("who").textContent=name;
+    document.getElementById("gate").style.display="none";document.getElementById("app").style.display="block";
     buildFilters();renderTests();
+    const s=ls("psk_sound");if(s==="0")document.getElementById("soundToggle").checked=false;
     if(isInApp())document.getElementById("browserNotice").style.display="block";
   }catch(e){showErr("gateErr",e.message||"Network error");}
   finally{b.disabled=false;b.textContent="Sign in";}
 }
-function buildFilters(){
-  fill("batch",CTX.dims&&CTX.dims.batches);fill("div",CTX.dims&&CTX.dims.divisions);fill("spec",CTX.dims&&CTX.dims.specs);
-}
+function buildFilters(){fill("batch",CTX.dims&&CTX.dims.batches);fill("div",CTX.dims&&CTX.dims.divisions);fill("spec",CTX.dims&&CTX.dims.specs);}
 function fill(id,arr){const s=document.getElementById(id);s.innerHTML='<option value="">All</option>'+(arr||[]).map(x=>"<option>"+esc(x)+"</option>").join("");}
 function renderTests(){
   const ba=document.getElementById("batch").value,dv=document.getElementById("div").value,sp=document.getElementById("spec").value;
   const live=(CTX.liveTests||[]).filter(t=>(!ba||t.batch===ba||t.batch==="All")&&(!dv||t.division===dv||t.division==="All")&&(!sp||t.spec===sp||t.spec==="All"));
   let o='<option value="MASTER">★ Master — mark in ALL live tests</option>';
   o+=live.map(t=>{const meta=[t.program,t.batch,t.division,t.spec].filter(x=>x&&x!=="All").join(" · ");return '<option value="'+esc(t.id)+'">'+esc(t.title)+(meta?" — "+esc(meta):"")+"</option>"}).join("");
-  document.getElementById("test").innerHTML=o;document.getElementById("live").textContent=live.length+" live test"+(live.length===1?"":"s")+" right now.";
+  document.getElementById("test").innerHTML=o;
+  document.getElementById("live").textContent=live.length+" live test"+(live.length===1?"":"s")+" right now.";
 }
 ["batch","div","spec"].forEach(id=>document.getElementById(id).addEventListener("change",renderTests));
 
+/* ---------- mode ---------- */
 function setMode(m){
-  document.getElementById("scanTab").classList.toggle("on",m==="scan");document.getElementById("manualTab").classList.toggle("on",m==="manual");
-  document.getElementById("scanCard").style.display=m==="scan"?"block":"none";document.getElementById("manualCard").style.display=m==="manual"?"block":"none";
+  document.getElementById("scanTab").classList.toggle("on",m==="scan");
+  document.getElementById("manualTab").classList.toggle("on",m==="manual");
+  document.getElementById("scanCard").style.display=m==="scan"?"block":"none";
+  document.getElementById("manualCard").style.display=m==="manual"?"block":"none";
   if(m!=="scan")stopScanner();
 }
+document.getElementById("soundToggle").addEventListener("change",e=>{ensureAudio();ls("psk_sound",e.target.checked?"1":"0");if(e.target.checked)beepOK();});
+
+/* ---------- camera list (laptop + phone) ---------- */
+async function loadCameras(){
+  cameras=await Html5Qrcode.getCameras();
+  if(!cameras||!cameras.length)throw new Error("No camera was found.");
+  const sel=document.getElementById("camSelect");
+  sel.innerHTML=cameras.map((c,i)=>'<option value="'+esc(c.id)+'">'+esc(c.label||("Camera "+(i+1)))+"</option>").join("");
+  if(cameras.length>1){document.getElementById("camLabel").style.display="block";sel.style.display="block";}
+  // prefer saved choice, else a rear/back camera, else last in list
+  const saved=ls("psk_cam");
+  let pick=saved&&cameras.find(c=>c.id===saved);
+  if(!pick)pick=cameras.find(c=>/back|rear|environment|world/i.test(c.label||""));
+  if(!pick)pick=cameras[cameras.length-1];
+  currentCamId=pick.id;sel.value=pick.id;
+}
+
+/* ---------- start / stop / toggle ---------- */
+function toggleScanner(){ scanning?stopScanner():startScanner(); }
+
 async function startScanner(){
+  ensureAudio();
   clearErr("scanErr");
   if(!window.isSecureContext){showErr("scanErr","Camera requires HTTPS. Open this scanner from its HTTPS address.");return;}
-  if(typeof Html5Qrcode==="undefined"){showErr("scanErr","QR scanner library is still loading. Wait a moment and try again.");return;}
-  if(scanning)return;
-  scanner=new Html5Qrcode("reader");
-  document.getElementById("scanHint").textContent="Starting rear camera…";
+  if(typeof Html5Qrcode==="undefined"){showErr("scanErr","QR library is still loading. Wait a second and try again.");return;}
+  if(scanning||starting)return;
+  starting=true;
+  const btn=document.getElementById("camBtn");btn.disabled=true;btn.textContent="Starting…";
+  setLive(false,"Starting camera…");
   try{
-    const cams=await Html5Qrcode.getCameras();
-    if(!cams||!cams.length)throw new Error("No camera was found.");
-    const rear=cams.find(c=>/back|rear|environment|world/i.test(c.label))||cams[cams.length-1];
-    await scanner.start({deviceId:{exact:rear.id}},{fps:12,qrbox:(w,h)=>{const s=Math.floor(Math.min(w,h)*.68);return {width:s,height:s}},aspectRatio:1},onDecoded,()=>{});
-    scanning=true;document.getElementById("camBtn").textContent="Scanner running";document.getElementById("camBtn").disabled=true;
-    document.getElementById("scanHint").textContent="Point the rear camera at the student's Attendance QR.";
+    if(!cameras.length)await loadCameras();
+    if(!scanner)scanner=new Html5Qrcode("reader",{verbose:false});
+    await scanner.start(
+      {deviceId:{exact:currentCamId}},
+      {fps:15,qrbox:(w,h)=>{const s=Math.floor(Math.min(w,h)*.7);return{width:s,height:s};},aspectRatio:1,disableFlip:false},
+      onDecoded,
+      ()=>{} // per-frame "not found" — ignore silently
+    );
+    scanning=true;
+    btn.textContent="Stop scanner";btn.disabled=false;
+    setLive(true,"Scanning… point at QR");
+    document.getElementById("scanHint").textContent="Continuous scanning is ON. Show each student's QR — it marks and re-arms automatically.";
+    ls("psk_cam",currentCamId);
   }catch(e){
-    stopScanner();const n=String(e&&e.name||"");
-    if(n==="NotAllowedError"||/permission|denied/i.test(String(e)))showErr("scanErr","Camera permission was denied. In Chrome, open Site settings → Camera → Allow, then reload this page.");
+    scanning=false;
+    try{if(scanner)await scanner.stop();}catch(_){}
+    btn.disabled=false;btn.textContent="Start scanner";setLive(false,"Camera off");
+    const n=String(e&&e.name||"");
+    if(n==="NotAllowedError"||/permission|denied/i.test(String(e)))
+      showErr("scanErr","Camera permission was denied. Click the camera/lock icon in the address bar → Allow → reload.");
+    else if(n==="NotReadableError"||/in use|readable/i.test(String(e)))
+      showErr("scanErr","Camera is in use by another app or tab. Close it (Zoom/Meet/other tabs) and try again.");
     else showErr("scanErr","Camera could not start. "+(e.message||e));
-  }
+  }finally{starting=false;}
 }
+
 async function stopScanner(){
-  if(scanner){try{if(scanning)await scanner.stop();}catch(e){}try{scanner.clear()}catch(e){}}
-  scanner=null;scanning=false;const b=document.getElementById("camBtn");b.textContent="Start scanner";b.disabled=false;
+  if(scanner){try{if(scanning)await scanner.stop();}catch(e){}try{scanner.clear();}catch(e){}}
+  scanner=null;scanning=false;
+  const b=document.getElementById("camBtn");b.textContent="Start scanner";b.disabled=false;
+  setLive(false,"Camera off");
 }
+
+async function switchCamera(){
+  currentCamId=document.getElementById("camSelect").value;
+  ls("psk_cam",currentCamId);
+  if(scanning){await stopScanner();await startScanner();}
+}
+
+/* ---------- decode → mark (CONTINUOUS, no camera restart) ---------- */
 async function onDecoded(text){
+  if(busy)return;                                   // ignore frames while a mark is processing
   const erp=extractErp(text);if(!erp)return;
-  const now=Date.now();if(last[erp]&&now-last[erp]<3500)return;last[erp]=now;
-  await stopScanner();document.getElementById("scanHint").textContent="QR detected. Marking attendance…";await doMark(erp);
-  setTimeout(()=>{if(document.getElementById("scanCard").style.display!=="none")startScanner()},700);
+  const now=Date.now();
+  if(last[erp]&&now-last[erp]<4000){                // same QR held in view → gentle dupe cue, keep scanning
+    // (soft, throttled so it doesn't spam)
+    if(!last["_dupetone_"+erp]||now-last["_dupetone_"+erp]>1500){last["_dupetone_"+erp]=now;beepDupe();flash("miss");}
+    return;
+  }
+  last[erp]=now;
+  busy=true;
+  setLive(true,"Marking…");
+  await doMark(erp);
+  // brief cool-down so the same code isn't re-read on the very next frame, then keep scanning
+  setTimeout(()=>{busy=false;if(scanning)setLive(true,"Ready — next QR");},600);
 }
+
 function extractErp(text){
   const raw=String(text||"").trim();if(!raw)return "";
   if(/^\d{4,}$/.test(raw))return raw;
@@ -236,26 +323,63 @@ function extractErp(text){
   try{const o=JSON.parse(raw);for(const k of ["erp","erpId","erp_id","studentErp","student_id","id"]){if(o&&o[k]!=null)return String(o[k]).trim();}}catch(e){}
   return raw;
 }
-async function markManual(){const erp=document.getElementById("erp").value.trim();if(!erp)return;document.getElementById("erp").value="";await doMark(erp);}
+
+/* ---------- manual ---------- */
+async function markManual(){
+  const el=document.getElementById("erp");const erp=el.value.trim();if(!erp)return;
+  el.value="";busy=true;await doMark(erp);busy=false;
+}
+
+/* ---------- the actual server mark ---------- */
 async function doMark(erp){
   try{
     const r=await jsonp({api:"scanMark",pin:PIN,testId:document.getElementById("test").value,erp,name:NAME});
-    showResult(r);if(r.ok){beep(true);vib(60)}else{beep(false);vib([60,40,60])}
-  }catch(e){showResult({ok:false,name:erp,msg:e.message||"Network error"});beep(false)}
+    if(r.ok){beepOK();vib(60);flash("hit");}
+    else{beepFail();vib([50,40,50]);flash("miss");}
+    showResult(r);
+  }catch(e){
+    beepFail();vib([50,40,50]);flash("miss");
+    showResult({ok:false,name:erp,msg:e.message||"Network error"});
+  }
 }
+
+/* ---------- result + recent ---------- */
 function showResult(r){
-  const el=document.getElementById("result");el.className="result "+(r.ok?"ok":"bad");el.style.display="block";
+  const el=document.getElementById("result");
+  const dupe=!r.ok&&/already|duplicate/i.test(r.msg||"");
+  el.className="result "+(r.ok?"ok":(dupe?"dupe":"bad"));el.style.display="block";
   if(r.ok){
     const tags=[r.program,r.batch,r.division,r.spec].filter(Boolean).join(" · ");
-    el.innerHTML='<div class="ico">✅</div><h2>'+esc(r.name)+'</h2><div class="sub">ERP '+esc(r.erp)+' · marked present in '+esc(r.marked)+' test'+(r.marked===1?"":"s")+(tags?"<br>"+esc(tags):"")+"</div>";
-    nmark++;document.getElementById("count").textContent=nmark+" marked";recent.unshift({name:r.name,erp:r.erp,n:r.marked});if(recent.length>20)recent.pop();drawRecent();
-  }else el.innerHTML='<div class="ico">⚠️</div><h2>'+esc(r.name||"Not marked")+'</h2><div class="sub">'+esc(r.msg||"Could not mark")+"</div>";
+    el.innerHTML='<div class="ico">✅</div><h2>'+esc(r.name)+'</h2><div class="sub">ERP '+esc(r.erp)+' · present in '+esc(r.marked)+' test'+(r.marked===1?"":"s")+(tags?"<br>"+esc(tags):"")+"</div>";
+    nmark++;document.getElementById("count").textContent=nmark;
+    recent.unshift({name:r.name,erp:r.erp,n:r.marked,ok:true});
+  }else{
+    el.innerHTML='<div class="ico">'+(dupe?"🟡":"⚠️")+'</div><h2>'+esc(r.name||"Not marked")+'</h2><div class="sub">'+esc(r.msg||"Could not mark")+"</div>";
+    recent.unshift({name:r.name||erpFallback(r),erp:r.erp||"",n:0,ok:false,msg:r.msg});
+  }
+  if(recent.length>25)recent.pop();
+  drawRecent();
 }
-function drawRecent(){document.getElementById("recent").innerHTML=recent.map(x=>'<div class="r"><span><b>'+esc(x.name)+'</b> <span class="mut">'+esc(x.erp)+'</span></span><span class="pill">'+esc(x.n)+'✓</span></div>').join("")||'<div class="mut" style="margin-top:8px">No scans yet.</div>'}
-function signOut(){ls("psk_pin","");ls("psk_name","");stopScanner();location.reload()}
-document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")signIn()});
-document.getElementById("erp").addEventListener("keydown",e=>{if(e.key==="Enter")markManual()});
-window.addEventListener("load",()=>{const p=ls("psk_pin"),n=ls("psk_name");if(p&&n){document.getElementById("pin").value=p;document.getElementById("name").value=n;signIn(true)}});
+function erpFallback(r){return r.erp||"—";}
+function drawRecent(){
+  const html=recent.map(x=>{
+    const pill=x.ok?'<span class="pill">'+esc(x.n)+' ✓</span>':'<span class="pill warn">'+esc(x.ok?"":"—")+' ✕</span>';
+    return '<div class="r"><span><b>'+esc(x.name)+'</b> <span class="mut">'+esc(x.erp)+'</span></span>'+pill+'</div>';
+  }).join("");
+  document.getElementById("recent").innerHTML=html||'<div class="mut">No scans yet.</div>';
+}
+function clearRecent(){recent=[];nmark=0;last={};document.getElementById("count").textContent="0";document.getElementById("result").style.display="none";drawRecent();}
+
+/* ---------- session ---------- */
+function signOut(){ls("psk_pin","");ls("psk_name","");stopScanner();location.reload();}
+document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")signIn();});
+document.getElementById("erp").addEventListener("keydown",e=>{if(e.key==="Enter")markManual();});
+document.addEventListener("visibilitychange",()=>{if(document.hidden&&scanning){/* keep running; browsers pause video automatically */}});
+window.addEventListener("beforeunload",()=>{try{if(scanning&&scanner)scanner.stop();}catch(e){}});
+window.addEventListener("load",()=>{
+  const p=ls("psk_pin"),n=ls("psk_name");
+  if(p&&n){document.getElementById("pin").value=p;document.getElementById("name").value=n;signIn(true);}
+});
 </script>
 </body>
 </html>
