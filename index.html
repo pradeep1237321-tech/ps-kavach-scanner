@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -77,50 +78,87 @@ const API="https://script.google.com/macros/s/AKfycbzG06nNZEsK4jhDLL-BVetZ1TBysv
 let PIN="",NAME="",CTX=null,scanner=null,scanning=false,last={},recent=[],nmark=0;
 
 function enc(v){return encodeURIComponent(v==null?"":String(v));}
-function jsonp(params){
+let bridgeFrame=null,bridgeReady=false,bridgeSeq=0,bridgePending={},bridgeWaiters=[];
+
+function initBridge(){
   return new Promise((resolve,reject)=>{
-    const cb="psk_cb_"+Date.now()+"_"+Math.random().toString(36).slice(2);
-    const s=document.createElement("script");
-    let finished=false;
+    if(bridgeReady){resolve();return;}
+    bridgeWaiters.push({resolve,reject});
+    if(bridgeFrame)return;
 
-    function cleanup(){
-      delete window[cb];
-      try{s.remove()}catch(e){}
-    }
+    const f=document.createElement("iframe");
+    f.id="pskBridge";
+    f.src=API+"?page=scanBridge";
+    f.title="PS Kavach server bridge";
+    f.style.cssText="position:fixed;width:1px;height:1px;border:0;opacity:0;pointer-events:none;left:-10px;top:-10px";
+    document.body.appendChild(f);
+    bridgeFrame=f;
 
-    function fail(msg){
-      if(finished)return;
-      finished=true;
-      clearTimeout(timer);
-      cleanup();
-      reject(new Error(msg));
-    }
-
-    window[cb]=data=>{
-      if(finished)return;
-      finished=true;
-      clearTimeout(timer);
-      cleanup();
-      resolve(data);
-    };
-
-    const q=Object.keys(params)
-      .map(k=>enc(k)+"="+enc(params[k]))
-      .join("&");
-
-    // Cache-bust the Apps Script request and attach the callback before loading it.
-    s.src=API+"?"+q+"&callback="+enc(cb)+"&_="+Date.now();
-    s.async=true;
-    s.onerror=()=>fail("Could not reach attendance server");
-    s.onload=()=>{
-      // Apps Script should execute the callback. If it loads without doing so,
-      // keep waiting until the timeout rather than falsely reporting success.
-    };
-
-    const timer=setTimeout(()=>fail("Attendance server timed out. Please try again."),20000);
-    document.head.appendChild(s);
+    setTimeout(()=>{
+      if(!bridgeReady){
+        const pending=bridgeWaiters.splice(0);
+        pending.forEach(x=>x.reject(new Error("Could not connect to attendance server. Please refresh and try again.")));
+        bridgeFrame=null;
+        try{f.remove()}catch(e){}
+      }
+    },20000);
   });
 }
+
+window.addEventListener("message",e=>{
+  if(e.data&&e.data.type==="PSK_BRIDGE_READY"){
+    bridgeReady=true;
+    bridgeWaiters.splice(0).forEach(x=>x.resolve());
+    return;
+  }
+
+  if(!e.data||e.data.type!=="PSK_BRIDGE_RES")return;
+  const p=bridgePending[e.data.id];
+  if(!p)return;
+
+  delete bridgePending[e.data.id];
+  clearTimeout(p.timer);
+
+  if(e.data.ok)p.resolve(e.data.data);
+  else p.reject(new Error(e.data.error||"Attendance server error"));
+});
+
+function bridgeCall(action,data){
+  return initBridge().then(()=>new Promise((resolve,reject)=>{
+    const id="psk_"+(++bridgeSeq)+"_"+Date.now();
+    const timer=setTimeout(()=>{
+      delete bridgePending[id];
+      reject(new Error("Attendance server timed out. Please try again."));
+    },20000);
+
+    bridgePending[id]={resolve,reject,timer};
+
+    bridgeFrame.contentWindow.postMessage({
+      type:"PSK_BRIDGE_REQ",
+      id:id,
+      action:action,
+      data:data||{}
+    },"*");
+  }));
+}
+
+function jsonp(params){
+  if(params.api==="scanContext"){
+    return bridgeCall("context",{pin:params.pin});
+  }
+
+  if(params.api==="scanMark"){
+    return bridgeCall("mark",{
+      pin:params.pin,
+      testId:params.testId,
+      erp:params.erp,
+      name:params.name
+    });
+  }
+
+  return Promise.reject(new Error("Unknown attendance request"));
+}
+
 function isInApp(){return /FBAN|FBAV|Instagram|Line|Twitter|WhatsApp/i.test(navigator.userAgent);}
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v);}catch(e){return null;}}
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display="block";}
@@ -140,7 +178,7 @@ async function signIn(silent=false){
     document.getElementById("who").textContent=name;document.getElementById("gate").style.display="none";document.getElementById("app").style.display="block";
     buildFilters();renderTests();
     if(isInApp())document.getElementById("browserNotice").style.display="block";
-  }catch(e){showErr("gateErr",e.message||"Could not connect to attendance server. Please check your internet connection and try again.");}
+  }catch(e){showErr("gateErr",e.message||"Network error");}
   finally{b.disabled=false;b.textContent="Sign in";}
 }
 function buildFilters(){
