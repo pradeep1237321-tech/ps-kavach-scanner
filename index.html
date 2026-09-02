@@ -19,7 +19,7 @@ button{font:inherit}.btn{border:0;border-radius:12px;padding:13px 16px;font-weig
 #reader{width:100%;overflow:hidden;border-radius:15px;background:#111;min-height:300px}#reader video{border-radius:15px;width:100%!important;display:block}
 #reader img[alt="Info icon"]{display:none}
 .scanbox{position:relative}
-.scanbox .frame{position:absolute;inset:16%;border:3px solid #ffffffcc;border-radius:16px;pointer-events:none;box-shadow:0 0 0 100vmax #00000040;transition:border-color .15s,box-shadow .15s}
+.scanbox .frame{position:absolute;inset:16%;border:3px solid #ffffffcc;border-radius:16px;pointer-events:none;box-shadow:0 0 0 100vmax #00000040;transition:border-color .15s}
 .scanbox.hit .frame{border-color:#5bffa6}.scanbox.miss .frame{border-color:#ff7d7d}
 .livedot{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;background:#00000066;color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:99px;pointer-events:none}
 .livedot i{width:8px;height:8px;border-radius:99px;background:#ff5b5b;display:inline-block}.livedot.on i{background:#4ade80;animation:pulse 1.2s infinite}
@@ -107,7 +107,9 @@ button{font:inherit}.btn{border:0;border-radius:12px;padding:13px 16px;font-weig
 <script>
 /* ====================================================================
    PS KAVACH — Attendance Scanner (GitHub Pages front-end)
-   Camera stays here; server calls go through hidden Apps Script iframe.
+   Server calls use JSONP (a <script> request) which works across
+   origins without CORS and without the Apps Script iframe sandbox.
+   Backend must expose ?api=scanContext and ?api=scanMark (see patch).
    ==================================================================== */
 const API="https://script.google.com/macros/s/AKfycbzG06nNZEsK4jhDLL-BVetZ1TBysvelgV0ZEE47tpAq_iFGxjmZdgJVfY9yY3TiTyZb/exec";
 
@@ -115,20 +117,14 @@ let PIN="",NAME="",CTX=null;
 let scanner=null,scanning=false,starting=false;
 let cameras=[],currentCamId=null;
 let last={},recent=[],nmark=0;
-let busy=false;                 // true while a mark request is in-flight (pauses accepting new QRs)
+let busy=false;
 
-/* ---------- audio: unlock once so beeps are instant & reliable (laptop + phone) ---------- */
+/* ---------- audio: unlock once so beeps are instant & reliable ---------- */
 let AC=null;
-function ensureAudio(){
-  try{
-    if(!AC){const A=window.AudioContext||window.webkitAudioContext;if(A)AC=new A();}
-    if(AC&&AC.state==="suspended")AC.resume();
-  }catch(e){}
-}
+function ensureAudio(){try{if(!AC){const A=window.AudioContext||window.webkitAudioContext;if(A)AC=new A();}if(AC&&AC.state==="suspended")AC.resume();}catch(e){}}
 function tone(freq,dur,type,vol){
   if(!document.getElementById("soundToggle").checked)return;
-  try{
-    ensureAudio();if(!AC)return;
+  try{ensureAudio();if(!AC)return;
     const o=AC.createOscillator(),g=AC.createGain();
     o.type=type||"sine";o.frequency.value=freq;
     g.gain.setValueAtTime(0.0001,AC.currentTime);
@@ -137,48 +133,29 @@ function tone(freq,dur,type,vol){
     o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+dur+0.02);
   }catch(e){}
 }
-function beepOK(){ tone(880,0.13,"sine",0.2); setTimeout(()=>tone(1320,0.11,"sine",0.18),90); } // pleasant two-note "ding"
-function beepDupe(){ tone(520,0.14,"triangle",0.16); }                                       // soft single mid tone
-function beepFail(){ tone(200,0.28,"square",0.14); }                                          // low buzz
+function beepOK(){tone(880,0.13,"sine",0.2);setTimeout(()=>tone(1320,0.11,"sine",0.18),90);}
+function beepDupe(){tone(520,0.14,"triangle",0.16);}
+function beepFail(){tone(200,0.28,"square",0.14);}
 function vib(x){try{navigator.vibrate&&navigator.vibrate(x)}catch(e){}}
 
-/* ---------- hidden Apps Script bridge (unchanged mechanism) ---------- */
-let bridgeFrame=null,bridgeReady=false,bridgeSeq=0,bridgePending={},bridgeWaiters=[];
-function initBridge(){
+/* ---------- JSONP: reliable cross-origin call to Apps Script ---------- */
+function jsonpCall(params){
   return new Promise((resolve,reject)=>{
-    if(bridgeReady){resolve();return;}
-    bridgeWaiters.push({resolve,reject});
-    if(bridgeFrame)return;
-    const f=document.createElement("iframe");
-    f.id="pskBridge";f.src=API+"?page=scanBridge";f.title="PS Kavach server bridge";
-    f.style.cssText="position:fixed;width:1px;height:1px;border:0;opacity:0;pointer-events:none;left:-10px;top:-10px";
-    document.body.appendChild(f);bridgeFrame=f;
-    setTimeout(()=>{
-      if(!bridgeReady){
-        bridgeWaiters.splice(0).forEach(x=>x.reject(new Error("Could not connect to attendance server. Refresh and try again.")));
-        bridgeFrame=null;try{f.remove()}catch(e){}
-      }
-    },20000);
+    const cb="psk_cb_"+Date.now()+"_"+Math.floor(Math.random()*1e6);
+    let s=null;
+    const timer=setTimeout(()=>{cleanup();reject(new Error("Attendance server timed out. Check your internet, and that the Web App URL is deployed as a new version."));},20000);
+    function cleanup(){clearTimeout(timer);try{delete window[cb];}catch(e){window[cb]=undefined;}if(s&&s.parentNode)s.parentNode.removeChild(s);}
+    window[cb]=function(data){cleanup();resolve(data);};
+    const qs=Object.keys(params).map(k=>encodeURIComponent(k)+"="+encodeURIComponent(params[k]==null?"":params[k])).join("&");
+    s=document.createElement("script");
+    s.src=API+"?"+qs+"&callback="+cb;
+    s.onerror=function(){cleanup();reject(new Error("Could not reach the attendance server. Check the Web App URL and that access is set to Anyone."));};
+    document.head.appendChild(s);
   });
 }
-window.addEventListener("message",e=>{
-  if(e.data&&e.data.type==="PSK_BRIDGE_READY"){bridgeReady=true;bridgeWaiters.splice(0).forEach(x=>x.resolve());return;}
-  if(!e.data||e.data.type!=="PSK_BRIDGE_RES")return;
-  const p=bridgePending[e.data.id];if(!p)return;
-  delete bridgePending[e.data.id];clearTimeout(p.timer);
-  if(e.data.ok)p.resolve(e.data.data);else p.reject(new Error(e.data.error||"Attendance server error"));
-});
-function bridgeCall(action,data){
-  return initBridge().then(()=>new Promise((resolve,reject)=>{
-    const id="psk_"+(++bridgeSeq)+"_"+Date.now();
-    const timer=setTimeout(()=>{delete bridgePending[id];reject(new Error("Attendance server timed out. Please try again."));},20000);
-    bridgePending[id]={resolve,reject,timer};
-    bridgeFrame.contentWindow.postMessage({type:"PSK_BRIDGE_REQ",id,action,data:data||{}},"*");
-  }));
-}
 function jsonp(params){
-  if(params.api==="scanContext")return bridgeCall("context",{pin:params.pin});
-  if(params.api==="scanMark")return bridgeCall("mark",{pin:params.pin,testId:params.testId,erp:params.erp,name:params.name});
+  if(params.api==="scanContext")return jsonpCall({api:"scanContext",pin:params.pin});
+  if(params.api==="scanMark")return jsonpCall({api:"scanMark",pin:params.pin,testId:params.testId,erp:params.erp,name:params.name});
   return Promise.reject(new Error("Unknown attendance request"));
 }
 
@@ -231,14 +208,13 @@ function setMode(m){
 }
 document.getElementById("soundToggle").addEventListener("change",e=>{ensureAudio();ls("psk_sound",e.target.checked?"1":"0");if(e.target.checked)beepOK();});
 
-/* ---------- camera list (laptop + phone) ---------- */
+/* ---------- camera list ---------- */
 async function loadCameras(){
   cameras=await Html5Qrcode.getCameras();
   if(!cameras||!cameras.length)throw new Error("No camera was found.");
   const sel=document.getElementById("camSelect");
   sel.innerHTML=cameras.map((c,i)=>'<option value="'+esc(c.id)+'">'+esc(c.label||("Camera "+(i+1)))+"</option>").join("");
   if(cameras.length>1){document.getElementById("camLabel").style.display="block";sel.style.display="block";}
-  // prefer saved choice, else a rear/back camera, else last in list
   const saved=ls("psk_cam");
   let pick=saved&&cameras.find(c=>c.id===saved);
   if(!pick)pick=cameras.find(c=>/back|rear|environment|world/i.test(c.label||""));
@@ -247,75 +223,52 @@ async function loadCameras(){
 }
 
 /* ---------- start / stop / toggle ---------- */
-function toggleScanner(){ scanning?stopScanner():startScanner(); }
-
+function toggleScanner(){scanning?stopScanner():startScanner();}
 async function startScanner(){
-  ensureAudio();
-  clearErr("scanErr");
+  ensureAudio();clearErr("scanErr");
   if(!window.isSecureContext){showErr("scanErr","Camera requires HTTPS. Open this scanner from its HTTPS address.");return;}
   if(typeof Html5Qrcode==="undefined"){showErr("scanErr","QR library is still loading. Wait a second and try again.");return;}
-  if(scanning||starting)return;
-  starting=true;
-  const btn=document.getElementById("camBtn");btn.disabled=true;btn.textContent="Starting…";
-  setLive(false,"Starting camera…");
+  if(scanning||starting)return;starting=true;
+  const btn=document.getElementById("camBtn");btn.disabled=true;btn.textContent="Starting…";setLive(false,"Starting camera…");
   try{
     if(!cameras.length)await loadCameras();
     if(!scanner)scanner=new Html5Qrcode("reader",{verbose:false});
     await scanner.start(
       {deviceId:{exact:currentCamId}},
       {fps:15,qrbox:(w,h)=>{const s=Math.floor(Math.min(w,h)*.7);return{width:s,height:s};},aspectRatio:1,disableFlip:false},
-      onDecoded,
-      ()=>{} // per-frame "not found" — ignore silently
+      onDecoded,()=>{}
     );
-    scanning=true;
-    btn.textContent="Stop scanner";btn.disabled=false;
-    setLive(true,"Scanning… point at QR");
+    scanning=true;btn.textContent="Stop scanner";btn.disabled=false;setLive(true,"Scanning… point at QR");
     document.getElementById("scanHint").textContent="Continuous scanning is ON. Show each student's QR — it marks and re-arms automatically.";
     ls("psk_cam",currentCamId);
   }catch(e){
-    scanning=false;
-    try{if(scanner)await scanner.stop();}catch(_){}
+    scanning=false;try{if(scanner)await scanner.stop();}catch(_){}
     btn.disabled=false;btn.textContent="Start scanner";setLive(false,"Camera off");
     const n=String(e&&e.name||"");
-    if(n==="NotAllowedError"||/permission|denied/i.test(String(e)))
-      showErr("scanErr","Camera permission was denied. Click the camera/lock icon in the address bar → Allow → reload.");
-    else if(n==="NotReadableError"||/in use|readable/i.test(String(e)))
-      showErr("scanErr","Camera is in use by another app or tab. Close it (Zoom/Meet/other tabs) and try again.");
+    if(n==="NotAllowedError"||/permission|denied/i.test(String(e)))showErr("scanErr","Camera permission was denied. Click the camera/lock icon in the address bar → Allow → reload.");
+    else if(n==="NotReadableError"||/in use|readable/i.test(String(e)))showErr("scanErr","Camera is in use by another app or tab. Close it (Zoom/Meet/other tabs) and try again.");
     else showErr("scanErr","Camera could not start. "+(e.message||e));
   }finally{starting=false;}
 }
-
 async function stopScanner(){
   if(scanner){try{if(scanning)await scanner.stop();}catch(e){}try{scanner.clear();}catch(e){}}
-  scanner=null;scanning=false;
-  const b=document.getElementById("camBtn");b.textContent="Start scanner";b.disabled=false;
-  setLive(false,"Camera off");
+  scanner=null;scanning=false;const b=document.getElementById("camBtn");b.textContent="Start scanner";b.disabled=false;setLive(false,"Camera off");
 }
+async function switchCamera(){currentCamId=document.getElementById("camSelect").value;ls("psk_cam",currentCamId);if(scanning){await stopScanner();await startScanner();}}
 
-async function switchCamera(){
-  currentCamId=document.getElementById("camSelect").value;
-  ls("psk_cam",currentCamId);
-  if(scanning){await stopScanner();await startScanner();}
-}
-
-/* ---------- decode → mark (CONTINUOUS, no camera restart) ---------- */
+/* ---------- decode → mark (continuous) ---------- */
 async function onDecoded(text){
-  if(busy)return;                                   // ignore frames while a mark is processing
+  if(busy)return;
   const erp=extractErp(text);if(!erp)return;
   const now=Date.now();
-  if(last[erp]&&now-last[erp]<4000){                // same QR held in view → gentle dupe cue, keep scanning
-    // (soft, throttled so it doesn't spam)
-    if(!last["_dupetone_"+erp]||now-last["_dupetone_"+erp]>1500){last["_dupetone_"+erp]=now;beepDupe();flash("miss");}
+  if(last[erp]&&now-last[erp]<4000){
+    if(!last["_d_"+erp]||now-last["_d_"+erp]>1500){last["_d_"+erp]=now;beepDupe();flash("miss");setLive(true,"Already scanned — next QR");}
     return;
   }
-  last[erp]=now;
-  busy=true;
-  setLive(true,"Marking…");
+  last[erp]=now;busy=true;setLive(true,"Marking…");
   await doMark(erp);
-  // brief cool-down so the same code isn't re-read on the very next frame, then keep scanning
   setTimeout(()=>{busy=false;if(scanning)setLive(true,"Ready — next QR");},600);
 }
-
 function extractErp(text){
   const raw=String(text||"").trim();if(!raw)return "";
   if(/^\d{4,}$/.test(raw))return raw;
@@ -325,26 +278,22 @@ function extractErp(text){
 }
 
 /* ---------- manual ---------- */
-async function markManual(){
-  const el=document.getElementById("erp");const erp=el.value.trim();if(!erp)return;
-  el.value="";busy=true;await doMark(erp);busy=false;
-}
+async function markManual(){const el=document.getElementById("erp");const erp=el.value.trim();if(!erp)return;el.value="";busy=true;await doMark(erp);busy=false;}
 
-/* ---------- the actual server mark ---------- */
+/* ---------- server mark ---------- */
 async function doMark(erp){
   try{
     const r=await jsonp({api:"scanMark",pin:PIN,testId:document.getElementById("test").value,erp,name:NAME});
-    if(r.ok){beepOK();vib(60);flash("hit");}
-    else{beepFail();vib([50,40,50]);flash("miss");}
-    showResult(r);
+    if(r.ok){beepOK();vib(60);flash("hit");}else{beepFail();vib([50,40,50]);flash("miss");}
+    showResult(r,erp);
   }catch(e){
     beepFail();vib([50,40,50]);flash("miss");
-    showResult({ok:false,name:erp,msg:e.message||"Network error"});
+    showResult({ok:false,name:erp,msg:e.message||"Network error"},erp);
   }
 }
 
 /* ---------- result + recent ---------- */
-function showResult(r){
+function showResult(r,erp){
   const el=document.getElementById("result");
   const dupe=!r.ok&&/already|duplicate/i.test(r.msg||"");
   el.className="result "+(r.ok?"ok":(dupe?"dupe":"bad"));el.style.display="block";
@@ -355,18 +304,15 @@ function showResult(r){
     recent.unshift({name:r.name,erp:r.erp,n:r.marked,ok:true});
   }else{
     el.innerHTML='<div class="ico">'+(dupe?"🟡":"⚠️")+'</div><h2>'+esc(r.name||"Not marked")+'</h2><div class="sub">'+esc(r.msg||"Could not mark")+"</div>";
-    recent.unshift({name:r.name||erpFallback(r),erp:r.erp||"",n:0,ok:false,msg:r.msg});
+    recent.unshift({name:r.name||erp||"—",erp:r.erp||erp||"",n:0,ok:false});
   }
-  if(recent.length>25)recent.pop();
-  drawRecent();
+  if(recent.length>25)recent.pop();drawRecent();
 }
-function erpFallback(r){return r.erp||"—";}
 function drawRecent(){
-  const html=recent.map(x=>{
-    const pill=x.ok?'<span class="pill">'+esc(x.n)+' ✓</span>':'<span class="pill warn">'+esc(x.ok?"":"—")+' ✕</span>';
+  document.getElementById("recent").innerHTML=recent.map(x=>{
+    const pill=x.ok?'<span class="pill">'+esc(x.n)+' ✓</span>':'<span class="pill warn">✕</span>';
     return '<div class="r"><span><b>'+esc(x.name)+'</b> <span class="mut">'+esc(x.erp)+'</span></span>'+pill+'</div>';
-  }).join("");
-  document.getElementById("recent").innerHTML=html||'<div class="mut">No scans yet.</div>';
+  }).join("")||'<div class="mut">No scans yet.</div>';
 }
 function clearRecent(){recent=[];nmark=0;last={};document.getElementById("count").textContent="0";document.getElementById("result").style.display="none";drawRecent();}
 
@@ -374,7 +320,6 @@ function clearRecent(){recent=[];nmark=0;last={};document.getElementById("count"
 function signOut(){ls("psk_pin","");ls("psk_name","");stopScanner();location.reload();}
 document.getElementById("pin").addEventListener("keydown",e=>{if(e.key==="Enter")signIn();});
 document.getElementById("erp").addEventListener("keydown",e=>{if(e.key==="Enter")markManual();});
-document.addEventListener("visibilitychange",()=>{if(document.hidden&&scanning){/* keep running; browsers pause video automatically */}});
 window.addEventListener("beforeunload",()=>{try{if(scanning&&scanner)scanner.stop();}catch(e){}});
 window.addEventListener("load",()=>{
   const p=ls("psk_pin"),n=ls("psk_name");
