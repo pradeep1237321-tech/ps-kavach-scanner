@@ -117,7 +117,7 @@ function jsonp(params){
       // keep waiting until the timeout rather than falsely reporting success.
     };
 
-    const timer=setTimeout(()=>fail("Attendance server timed out. Please try again."),20000);
+    const timer=setTimeout(()=>fail("Attendance server timed out. Please scan again."),8000);
     document.head.appendChild(s);
   });
 }
@@ -166,36 +166,68 @@ function setMode(m){
 async function startScanner(){
   clearErr("scanErr");
   if(!window.isSecureContext){showErr("scanErr","Camera requires HTTPS. Open this scanner from its HTTPS address.");return;}
-  if(typeof Html5Qrcode==="undefined"){showErr("scanErr","QR scanner library is still loading. Wait a moment and try again.");return;}
   if(scanning)return;
-  scanner=new Html5Qrcode("reader",{verbose:false});
   document.getElementById("scanHint").textContent="Starting high-speed rear camera…";
   try{
+    // Native BarcodeDetector is substantially faster on supported Chrome/Android devices.
+    if("BarcodeDetector" in window){
+      const supported=await BarcodeDetector.getSupportedFormats();
+      if(supported.includes("qr_code")){
+        const video=document.querySelector("#reader video")||document.createElement("video");
+        if(!video.parentNode){video.setAttribute("playsinline","");video.muted=true;video.autoplay=true;document.getElementById("reader").appendChild(video);}
+        nativeStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30,max:30}}});
+        video.srcObject=nativeStream; await video.play();
+        nativeDetector=new BarcodeDetector({formats:["qr_code"]});
+        scanning=true;document.getElementById("camBtn").textContent="✓ Scanner running";document.getElementById("camBtn").disabled=true;
+        document.getElementById("scanHint").textContent="Ready — fast scan mode. Move to the next QR immediately.";
+        nativeScanLoop(video); return;
+      }
+    }
+    if(typeof Html5Qrcode==="undefined")throw new Error("QR scanner library is still loading. Wait a moment and try again.");
+    scanner=new Html5Qrcode("reader",{verbose:false});
     const formats=window.Html5QrcodeSupportedFormats?[Html5QrcodeSupportedFormats.QR_CODE]:undefined;
-    const config={fps:20,qrbox:(w,h)=>{const s=Math.floor(Math.min(w,h)*.78);return {width:s,height:s}},aspectRatio:1,disableFlip:true};
+    const config={fps:30,qrbox:(w,h)=>{const s=Math.floor(Math.min(w,h)*.82);return {width:s,height:s}},aspectRatio:1,disableFlip:true};
     if(formats)config.formatsToSupport=formats;
-    if(!audioCtx){try{audioCtx=new (window.AudioContext||window.webkitAudioContext)();await audioCtx.resume();}catch(e){}}
     await scanner.start({facingMode:"environment"},config,onDecoded,()=>{});
     scanning=true;document.getElementById("camBtn").textContent="✓ Scanner running";document.getElementById("camBtn").disabled=true;
-    document.getElementById("scanHint").textContent="Ready — scan the next student's QR. No restart between students.";
+    document.getElementById("scanHint").textContent="Ready — fast scan mode. Move to the next QR immediately.";
   }catch(e){
+    try{if(nativeStream)nativeStream.getTracks().forEach(t=>t.stop())}catch(x){} nativeStream=null;
     try{if(scanner)await scanner.clear()}catch(x){} scanner=null;scanning=false;
     const n=String(e&&e.name||"");
     if(n==="NotAllowedError"||/permission|denied/i.test(String(e)))showErr("scanErr","Camera permission was denied. In Chrome, open Site settings → Camera → Allow, then reload this page.");
     else showErr("scanErr","Camera could not start. "+(e.message||e));
   }
 }
+async function nativeScanLoop(video){
+  if(!scanning||!nativeDetector)return;
+  try{
+    if(!nativeBusy && video.readyState>=2){
+      nativeBusy=true;
+      const codes=await nativeDetector.detect(video);
+      if(codes&&codes.length){
+        const text=codes[0].rawValue||"";
+        if(text)await onDecoded(text);
+      }
+    }
+  }catch(e){} finally{nativeBusy=false;}
+  if(scanning)nativeRAF=requestAnimationFrame(()=>nativeScanLoop(video));
+}
 async function stopScanner(){
-  if(scanner){try{if(scanning)await scanner.stop();}catch(e){}try{scanner.clear()}catch(e){}}
-  scanner=null;scanning=false;const b=document.getElementById("camBtn");b.textContent="Start scanner";b.disabled=false;
+  scanning=false;cancelAnimationFrame(nativeRAF);nativeRAF=0;nativeBusy=false;
+  if(nativeStream){try{nativeStream.getTracks().forEach(t=>t.stop())}catch(e){}nativeStream=null;}
+  nativeDetector=null;
+  if(scanner){try{await scanner.stop()}catch(e){}try{scanner.clear()}catch(e){}scanner=null;}
+  const r=document.getElementById("reader");if(r)r.innerHTML="";
+  const b=document.getElementById("camBtn");b.textContent="Start scanner";b.disabled=false;
 }
 async function onDecoded(text){
   const erp=extractErp(text);if(!erp)return;
   const key=String(erp).trim().toUpperCase(), now=Date.now();
   if(pending[key])return;
-  if(last[key]&&now-last[key]<2500)return;
-  last[key]=now; pending[key]=true;
-  // Keep the camera alive while the server records attendance.
+  if(last[key]&&now-last[key]<1800)return;
+  last[key]=now;pending[key]=true;
+  // Camera stays live; server request runs in parallel with decoding.
   doMark(key).finally(()=>{delete pending[key];});
 }
 function extractErp(text){
@@ -209,9 +241,7 @@ async function markManual(){const erp=document.getElementById("erp").value.trim(
 async function doMark(erp){
   const testId=document.getElementById("test").value;
   try{
-    let r;
-    try{r=await jsonp({api:"scanMark",pin:PIN,testId,erp,name:NAME});}
-    catch(e){r=await jsonp({api:"scanMark",pin:PIN,testId,erp,name:NAME});}
+    const r=await jsonp({api:"scanMark",pin:PIN,testId,erp,name:NAME});
     showResult(r);if(r.ok){beep(true);vib(45)}else{beep(false);vib([45,35,45])}
   }catch(e){showResult({ok:false,name:erp,msg:"Network delay — please scan again"});beep(false)}
 }
