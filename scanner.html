@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PS Kavach — QR Attendance Scanner</title>
+<style>
+:root{--brand:#9c1c2e;--brand-2:#c79a4b;--brand-d:#7a1424;--ink:#1c1c22;--ink-2:#54545f;--line:#e7e7ee;--line-2:#f0f0f5;--bg:#f1f1f6;--ok:#1f9d55;--warn:#d98c1a;--bad:#d1414b;--sans:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px;min-height:100vh}
+h1,h2,h3{margin:0;font-weight:700}button{font-family:inherit;cursor:pointer}input,select{font-family:inherit;font-size:14px}
+.top{background:linear-gradient(90deg,var(--brand-d),var(--brand));color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
+.top .lg{width:36px;height:36px;border-radius:9px;background:#fff;display:grid;place-items:center;overflow:hidden;flex:none}
+.top .lg img{width:100%;height:100%;object-fit:contain}.top .lg .p{color:var(--brand);font-weight:800;font-size:13px}
+.top b{font-size:15px;display:block;line-height:1.1}.top span{font-size:11px;opacity:.85}
+.top .who{margin-left:auto;text-align:right;font-size:12px}
+.wrap{max-width:920px;margin:0 auto;padding:18px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(20,20,40,.05),0 6px 24px rgba(20,20,40,.06)}
+.card.pad{padding:18px}
+.grid{display:grid;gap:16px}@media(min-width:760px){.g2{grid-template-columns:1.1fr .9fr}}
+.field{margin-bottom:14px}label.fl{display:block;font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:5px}
+input[type=text],input[type=password],select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fbfbfd;outline:none}
+input:focus,select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(156,28,46,.1)}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 16px;border-radius:9px;border:1px solid var(--brand);background:var(--brand);color:#fff;font-weight:700;font-size:14px}
+.btn:hover{background:var(--brand-d)}.btn.soft{background:var(--line-2);border-color:var(--line);color:var(--ink)}
+.btn.wide{width:100%;justify-content:center}.btn.sm{padding:7px 12px;font-size:12.5px}.btn[disabled]{opacity:.5}
+.pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:var(--line-2);color:var(--ink-2)}
+.pill.ok{background:#e9f7ef;color:var(--ok)}.pill.warn{background:#fdf1e0;color:var(--warn)}.pill.bad{background:#fdebec;color:var(--bad)}
+.blocktitle{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2);margin:0 0 12px}
+#stage{position:relative;background:#111;border-radius:12px;overflow:hidden;aspect-ratio:4/3;display:grid;place-items:center}
+#vid{width:100%;height:100%;object-fit:cover;display:none}
+#idle{color:#fff;text-align:center;font-size:13px;opacity:.85}
+#reticle{position:absolute;inset:16% 20%;border:3px solid var(--brand-2);border-radius:14px;display:none;box-shadow:0 0 0 2000px rgba(0,0,0,.28)}
+#flash{position:absolute;inset:0;background:var(--ok);opacity:0;pointer-events:none;transition:opacity .1s}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:20px;background:var(--line-2);color:var(--ink-2)}
+.mk{display:flex;justify-content:space-between;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line-2)}
+.note{background:#fff8ec;border:1px solid #f0dcae;border-radius:11px;padding:12px 14px;font-size:12.5px;color:#6d5220}
+.screen{display:none}.screen.on{display:block}
+#toast{position:fixed;right:18px;bottom:18px;z-index:200;display:flex;flex-direction:column;gap:9px}
+.toast{background:#23232e;color:#fff;padding:11px 15px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.28)}
+.toast.ok{background:#177245}.toast.bad{background:#b3323b}.toast.warn{background:#a5701a}
+.demo-badge{position:fixed;left:14px;bottom:14px;z-index:150;background:#23232e;color:#fff;font-size:11px;font-weight:700;padding:5px 11px;border-radius:20px;opacity:.85}
+.empty{text-align:center;padding:24px;color:var(--ink-2);font-size:13px}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="lg" id="topLogo"><span class="p">PS</span></div>
+  <div><b id="topPlat">PS Kavach — Scanner</b><span>QR Attendance</span></div>
+  <div class="who" id="topWho"></div>
+</div>
+
+<div class="wrap">
+  <!-- LOGIN -->
+  <div class="screen on" id="scLogin">
+    <div class="card pad" style="max-width:420px;margin:40px auto">
+      <div class="blocktitle">Invigilator sign-in</div>
+      <div class="field"><label class="fl">Login ID</label><input type="text" id="lgLogin" placeholder="invig01"></div>
+      <div class="field"><label class="fl">PIN</label><input type="password" id="lgPin" placeholder="••••"></div>
+      <button class="btn wide" onclick="login()">Sign in ›</button>
+      <div class="note" style="margin-top:14px">Your account can only scan inside the window your admin scheduled. Outside it, marking is refused.</div>
+    </div>
+  </div>
+
+  <!-- SCANNER -->
+  <div class="screen" id="scMain">
+    <div class="grid g2">
+      <div class="card pad">
+        <div class="blocktitle">Live QR attendance</div>
+        <div class="field"><label class="fl">Active test window</label><select id="mTest" onchange="checkWindow()"></select></div>
+        <div id="stage">
+          <video id="vid" playsinline muted></video><canvas id="cv" style="display:none"></canvas>
+          <div id="idle">Camera off<br><span style="font-size:11px">Press Start scanning</span></div>
+          <div id="reticle"></div><div id="flash"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center">
+          <button class="btn" id="scanBtn" onclick="toggleScan()">▶ Start scanning</button>
+          <button class="btn soft" id="torchBtn" onclick="toggleTorch()" style="display:none">🔦 Torch</button>
+          <span class="chip" id="engineChip">Engine: —</span>
+          <span class="chip" id="winChip">Window: —</span>
+        </div>
+        <div class="note" style="margin-top:12px">Uses the browser's native decoder (payment-scanner class) with a jsQR fallback, continuous scan and a duplicate guard so the same code is never counted twice.</div>
+      </div>
+      <div class="card pad">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="blocktitle" style="margin:0">Marked this session</div><span class="pill ok" id="cnt">0 marked</span></div>
+        <div id="list" style="max-height:420px;overflow:auto"><div class="empty">Scans appear here in real time.</div></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn sm soft" onclick="manualMark()">＋ Manual (by ERP)</button><button class="btn sm soft" onclick="exportCSV()">⬇ Export</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div class="demo-badge" id="demoBadge" style="display:none">DEMO MODE — no backend connected</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="psk-client.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m,t){const d=document.createElement('div');d.className='toast'+(t?' '+t:'');d.textContent=m;$('#toast').appendChild(d);setTimeout(()=>d.remove(),2600);}
+let CFG={college:{plat:'PS Kavach — QR Scanner',logo:'',brand:'#9c1c2e',brand2:'#c79a4b'},engine:{native:true,cont:true,dup:true,beep:true,fps:'15',cam:'environment',res:'1280',torch:true}};
+let INVIG=null,TESTS=[],WIN={scanOpen:true},marks=[];
+
+(async function(){
+  if(PSK.demo)$('#demoBadge').style.display='block';
+  try{const c=await PSK('config_get');if(c&&c.config)CFG=deepMerge(CFG,c.config);}catch(e){}
+  theme();
+})();
+function deepMerge(a,b){for(const k in b){if(b[k]&&typeof b[k]==='object'&&!Array.isArray(b[k]))a[k]=deepMerge(a[k]||{},b[k]);else a[k]=b[k];}return a;}
+function theme(){document.documentElement.style.setProperty('--brand',CFG.college.brand);document.documentElement.style.setProperty('--brand-2',CFG.college.brand2);const lg=CFG.college.logo?`<img src="${CFG.college.logo}">`:'<span class="p">PS</span>';$('#topLogo').innerHTML=lg;$('#topPlat').textContent=CFG.college.plat||'PS Kavach — Scanner';}
+
+async function login(){
+  const login=$('#lgLogin').value.trim(),pin=$('#lgPin').value.trim();
+  if(!login)return toast('Enter login ID','bad');
+  let r;try{r=await PSK('invig_login',{login,pin});}catch(e){r={ok:true,invig:{id:'demo',name:login||'Demo Invigilator',assign:'Hall A',on:true,winStart:'',winEnd:''}};}
+  if(!r.ok)return toast(r.error||'Invalid login','bad');
+  INVIG=r.invig;$('#topWho').innerHTML='<b>'+esc(INVIG.name)+'</b><br>'+esc(INVIG.assign||'')+(INVIG.on?'':' • <span class="pill bad">OFF</span>');
+  $('#scLogin').classList.remove('on');$('#scMain').classList.add('on');
+  try{const t=await PSK('tests');TESTS=t.rows||[];}catch(e){TESTS=[{id:'demo',name:'Demo Test — PGDM Sem I'}];}
+  $('#mTest').innerHTML=TESTS.length?TESTS.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join(''):'<option value="demo">Demo Test</option>';
+  checkWindow();
+}
+
+async function checkWindow(){
+  const testId=$('#mTest').value;
+  try{WIN=await PSK('scan_context',{testId});}catch(e){WIN={scanOpen:true,note:'demo'};}
+  const chip=$('#winChip');
+  if(WIN.scanOpen){chip.textContent='Window: OPEN';chip.className='chip';chip.style.background='#e9f7ef';chip.style.color='var(--ok)';}
+  else{chip.textContent='Window: CLOSED';chip.style.background='#fdebec';chip.style.color='var(--bad)';}
+}
+
+/* ===== scanner engine ===== */
+let stream=null,raf=null,detector=null,track=null,torchOn=false,last='',lastT=0,lastFrame=0;
+async function toggleScan(){if(stream){stopScan();return;}
+  if(INVIG&&!INVIG.on)return toast('Your account is switched OFF','bad');
+  if(INVIG&&INVIG.winStart){const t=new Date().toTimeString().slice(0,5);if(!(t>=INVIG.winStart&&t<=INVIG.winEnd))return toast('Outside your scan window','bad');}
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:CFG.engine.cam||'environment',width:{ideal:+(CFG.engine.res||1280)}}});
+    const v=$('#vid');v.srcObject=stream;await v.play();v.style.display='block';$('#idle').style.display='none';$('#reticle').style.display='block';
+    track=stream.getVideoTracks()[0];
+    if(CFG.engine.torch&&track.getCapabilities&&track.getCapabilities().torch)$('#torchBtn').style.display='inline-flex';
+    if(CFG.engine.native!==false&&'BarcodeDetector'in window){detector=new BarcodeDetector({formats:['qr_code']});$('#engineChip').textContent='Engine: Native (fast)';}
+    else{detector=null;$('#engineChip').textContent='Engine: jsQR (fallback)';}
+    $('#scanBtn').textContent='⏹ Stop';loop();toast('Scanner live','ok');
+  }catch(e){toast('Camera error: '+e.message,'bad');stream=null;}
+}
+function stopScan(){if(raf)cancelAnimationFrame(raf);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;detector=null;$('#vid').style.display='none';$('#idle').style.display='block';$('#reticle').style.display='none';$('#torchBtn').style.display='none';$('#scanBtn').textContent='▶ Start scanning';}
+async function loop(){const v=$('#vid');const fps=+(CFG.engine.fps||15);const gap=fps?1000/fps:0;const now=performance.now();
+  if(!gap||now-lastFrame>=gap){lastFrame=now;
+    try{let code=null;
+      if(detector){const c=await detector.detect(v);if(c.length)code=c[0].rawValue;}
+      else{const cv=$('#cv');cv.width=v.videoWidth;cv.height=v.videoHeight;const ctx=cv.getContext('2d');ctx.drawImage(v,0,0,cv.width,cv.height);const img=ctx.getImageData(0,0,cv.width,cv.height);const r=window.jsQR&&jsQR(img.data,img.width,img.height);if(r)code=r.data;}
+      if(code)handle(code);
+    }catch(e){}}
+  if(stream)raf=requestAnimationFrame(loop);}
+function handle(code){const now=Date.now();if(CFG.engine.dup!==false&&code===last&&now-lastT<2500)return;last=code;lastT=now;mark(code);}
+
+async function mark(raw){
+  const erp=(String(raw).split('|')[0]||raw).trim();
+  if(marks.find(m=>m.erp===erp))return toast(erp+' already marked','warn');
+  const testId=$('#mTest').value;
+  let r;try{r=await PSK('scan_mark',{erp,testId,invig:INVIG?INVIG.id:''});}catch(e){r={ok:true,name:(String(raw).split('|')[1]||'Student'),matched:true};}
+  if(!r.ok){toast(r.error||'Rejected','bad');return;}
+  if(r.dup){toast(erp+' already marked','warn');return;}
+  marks.unshift({erp,name:r.name||'',time:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),ok:r.matched!==false});
+  if(CFG.engine.beep!==false)beep();if(navigator.vibrate)navigator.vibrate(70);
+  const f=$('#flash');f.style.opacity=.6;setTimeout(()=>f.style.opacity=0,140);
+  render();
+}
+function render(){$('#cnt').textContent=marks.length+' marked';$('#list').innerHTML=marks.length?marks.map(m=>`<div class="mk"><div><b>${esc(m.erp)}</b> <span style="color:var(--ink-2)">${esc(m.name)}</span></div><div><span style="color:var(--ink-2);font-size:12px">${m.time}</span> <span class="pill ${m.ok?'ok':'warn'}">${m.ok?'✓':'?'}</span></div></div>`).join(''):'<div class="empty">Scans appear here in real time.</div>';}
+function manualMark(){const erp=prompt('Enter ERP to mark manually:');if(erp)mark(erp.trim());}
+function exportCSV(){if(!marks.length)return toast('Nothing to export','bad');const csv='ERP,Name,Time,Matched\n'+marks.map(m=>`${m.erp},${m.name},${m.time},${m.ok}`).join('\n');const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='attendance_'+Date.now()+'.csv';a.click();}
+async function toggleTorch(){if(!track)return;try{torchOn=!torchOn;await track.applyConstraints({advanced:[{torch:torchOn}]});}catch(e){toast('Torch not supported','bad');}}
+let actx;function beep(){try{actx=actx||new(window.AudioContext||webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.frequency.value=880;g.gain.value=.08;o.start();setTimeout(()=>o.stop(),90);}catch(e){}}
+</script>
+</body>
+</html>

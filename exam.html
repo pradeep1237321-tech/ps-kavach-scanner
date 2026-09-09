@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PS Kavach — Secure Exam</title>
+<style>
+:root{--brand:#9c1c2e;--brand-2:#c79a4b;--brand-d:#7a1424;--ink:#1c1c22;--ink-2:#54545f;--line:#e7e7ee;--line-2:#f0f0f5;--bg:#f1f1f6;--ok:#1f9d55;--warn:#d98c1a;--bad:#d1414b;--sans:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px}
+h1,h2,h3{margin:0;font-weight:700}
+button{font-family:inherit;cursor:pointer}
+input,textarea,select{font-family:inherit;font-size:14px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:9px;border:1px solid var(--brand);background:var(--brand);color:#fff;font-weight:700;font-size:14px}
+.btn:hover{background:var(--brand-d)}.btn.soft{background:var(--line-2);border-color:var(--line);color:var(--ink)}
+.btn.gold{background:var(--brand-2);border-color:var(--brand-2)}.btn.sm{padding:6px 12px;font-size:12.5px}
+.btn.wide{width:100%;justify-content:center}.btn[disabled]{opacity:.5;cursor:not-allowed}
+.pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:var(--line-2);color:var(--ink-2)}
+.pill.warn{background:#fdf1e0;color:var(--warn)}.pill.ok{background:#e9f7ef;color:var(--ok)}
+.field{margin-bottom:14px}label.fl{display:block;font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:5px}
+input[type=text],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;outline:none}
+input:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(156,28,46,.1)}
+.note{background:#fff8ec;border:1px solid #f0dcae;border-radius:11px;padding:12px 14px;font-size:12.5px;color:#6d5220}
+.kbd{font-family:ui-monospace,Menlo,monospace;background:#eee;border:1px solid #ddd;border-radius:5px;padding:1px 6px;font-size:11.5px;font-weight:700}
+
+/* screens */
+.screen{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:22px;overflow:auto;z-index:5}
+.screen.on{display:flex}
+.panel{background:#fff;border-radius:18px;max-width:640px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.15);overflow:hidden}
+.panel .ph{background:var(--brand);color:#fff;padding:22px 26px;display:flex;gap:13px;align-items:center}
+.panel .ph .lg{width:46px;height:46px;border-radius:11px;background:#fff;display:grid;place-items:center;overflow:hidden;flex:none}
+.panel .ph .lg img{width:100%;height:100%;object-fit:contain}.panel .ph .lg .p{color:var(--brand);font-weight:800}
+.panel .ph h2{font-size:20px}.panel .ph p{margin:3px 0 0;font-size:12.5px;opacity:.9}
+.panel .pb{padding:24px 26px}
+.elig{display:flex;align-items:center;gap:12px;padding:13px 15px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
+.elig .ck{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;flex:none;background:var(--ok)}
+.elig.no .ck{background:var(--bad)}.elig b{font-size:13.5px}.elig p{margin:1px 0 0;font-size:12px;color:var(--ink-2)}
+.instrx{font-size:13.5px;line-height:1.7;padding-left:20px;margin:0 0 8px}.instrx li{margin-bottom:5px}
+
+/* exam */
+#exam{position:fixed;inset:0;display:none;flex-direction:column}
+#exam.on{display:flex}
+.ex-top{background:var(--brand);color:#fff;padding:9px 18px;display:flex;align-items:center;gap:14px;flex:none;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.ex-top .lg{width:34px;height:34px;border-radius:9px;background:#fff;display:grid;place-items:center;overflow:hidden;flex:none}
+.ex-top .lg img{width:100%;height:100%;object-fit:contain}.ex-top .lg .p{color:var(--brand);font-weight:800;font-size:13px}
+.ex-top .ti b{font-size:14px;display:block;line-height:1.1}.ex-top .ti span{font-size:11px;opacity:.85}
+.ex-top .clk{background:rgba(255,255,255,.16);padding:6px 14px;border-radius:10px;font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+.ex-top .clk small{font-size:9px;display:block;font-weight:600;opacity:.8}
+.ex-viol{background:rgba(0,0,0,.18);padding:6px 12px;border-radius:10px;font-size:11.5px;font-weight:700}
+.ex-body{flex:1;display:grid;grid-template-columns:1fr 288px;min-height:0}
+.ex-main{overflow-y:auto;padding:26px 30px}.ex-qcard{max-width:760px;margin:0 auto}
+.ex-sectionbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.ex-sectionbar .sh{background:var(--brand);color:#fff;font-weight:800;font-size:13px;padding:6px 14px;border-radius:20px}
+.ex-sectionbar .st{font-size:12px;color:var(--ink-2);font-weight:600}
+.ex-sectionbar .stimer{margin-left:auto;background:#fff;border:1px solid var(--line);padding:5px 12px;border-radius:10px;font-weight:800;font-size:13px;color:var(--brand);font-variant-numeric:tabular-nums}
+.ex-qmeta{font-size:12px;color:var(--ink-2);font-weight:700;margin-bottom:8px}
+.ex-qtext{font-size:17px;font-weight:600;line-height:1.5;margin-bottom:20px}
+.ex-opt{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1.5px solid var(--line);border-radius:12px;margin-bottom:11px;background:#fff}
+.ex-opt:hover{border-color:var(--brand-2);background:#fffdf8}
+.ex-opt.sel{border-color:var(--brand);background:#fdf3f4;box-shadow:0 0 0 3px rgba(156,28,46,.08)}
+.ex-opt .mk{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-weight:800;font-size:12px;flex:none;color:var(--ink-2)}
+.ex-opt.sel .mk{background:var(--brand);border-color:var(--brand);color:#fff}.ex-opt .ot{padding-top:2px;font-size:14.5px}
+.ex-answer textarea{width:100%;min-height:130px;padding:14px;border:1.5px solid var(--line);border-radius:12px;font-size:14.5px}
+.ex-foot{flex:none;border-top:1px solid var(--line);background:#fff;padding:12px 30px;display:flex;gap:10px;align-items:center}
+.ex-side{border-left:1px solid var(--line);background:#fff;display:flex;flex-direction:column;min-height:0}
+.ex-side .sd-h{padding:14px 16px 8px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.ex-side .sd-scroll{flex:1;overflow-y:auto;padding:0 14px 14px}
+.ex-secgrp .lbl{font-size:12px;font-weight:800;color:var(--brand);margin:10px 0 9px;display:flex;align-items:center;gap:7px}
+.ex-secgrp .lbl .bar{width:4px;height:14px;background:var(--brand-2);border-radius:3px}
+.ex-secgrp .lbl .cd{margin-left:auto;font-size:10.5px;color:var(--ink-2);font-weight:700}
+.qgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}
+.qbtn{aspect-ratio:1;border:1.5px solid var(--line);border-radius:9px;background:#fff;font-weight:800;font-size:12px;color:var(--ink-2);position:relative}
+.qbtn:hover{border-color:var(--brand)}.qbtn.ans{background:var(--ok);border-color:var(--ok);color:#fff}
+.qbtn.cur{outline:3px solid var(--brand);outline-offset:1px}.qbtn.flag{background:var(--warn);border-color:var(--warn);color:#fff}
+.ex-legend{padding:12px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:10px}
+.ex-legend b{display:inline-flex;align-items:center;gap:5px;font-weight:600}.ex-legend i{width:11px;height:11px;border-radius:3px}
+.ex-side .sd-submit{padding:12px 16px;border-top:1px solid var(--line)}
+@media(max-width:820px){.ex-body{grid-template-columns:1fr}.ex-side{display:none}}
+.viol-flash{position:fixed;inset:0;background:var(--bad);opacity:0;z-index:120;pointer-events:none;transition:opacity .1s}
+#toast{position:fixed;right:20px;bottom:20px;z-index:200;display:flex;flex-direction:column;gap:9px}
+.toast{background:#23232e;color:#fff;padding:11px 15px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.28)}
+.toast.ok{background:#177245}.toast.bad{background:#b3323b}
+.demo-badge{position:fixed;left:14px;bottom:14px;z-index:150;background:#23232e;color:#fff;font-size:11px;font-weight:700;padding:5px 11px;border-radius:20px;opacity:.85}
+</style>
+</head>
+<body>
+
+<!-- ENTRY -->
+<div class="screen on" id="scEntry">
+  <div class="panel">
+    <div class="ph"><div class="lg" id="enLogo"><span class="p">PS</span></div><div><h2 id="enPlat">PS Kavach — Secure Exam</h2><p>Sign in to begin your test</p></div></div>
+    <div class="pb">
+      <div class="field"><label class="fl">Your ERP number</label><input type="text" id="enErp" placeholder="26700010"></div>
+      <div class="field"><label class="fl">Select test</label><select id="enTest"></select></div>
+      <button class="btn wide" onclick="checkEntry()">Continue ›</button>
+      <div class="note" style="margin-top:14px">Your session is secured. If you have an unfinished attempt it will <b>resume</b>, not restart.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ELIGIBILITY -->
+<div class="screen" id="scElig">
+  <div class="panel">
+    <div class="ph"><div class="lg"><span class="p">02</span></div><div><h2>Test Eligibility</h2><p>Confirming you are cleared to sit this test</p></div></div>
+    <div class="pb"><div id="eligList"></div>
+      <button class="btn wide" id="eligBtn" onclick="showScreen('scInstr')">Continue to instructions ›</button>
+    </div>
+  </div>
+</div>
+
+<!-- INSTRUCTIONS -->
+<div class="screen" id="scInstr">
+  <div class="panel">
+    <div class="ph"><div class="lg"><span class="p">03</span></div><div><h2>Test Instructions</h2><p id="inTitle">Read carefully before starting</p></div></div>
+    <div class="pb">
+      <ol class="instrx" id="inList"></ol>
+      <div class="note" style="margin:12px 0">Once you start, the test runs in secure fullscreen. Reloading, switching tabs or leaving fullscreen is recorded. Answers autosave — an interruption resumes you where you were, it does <b>not</b> restart the test.</div>
+      <label style="display:flex;gap:9px;font-size:13px;font-weight:600;margin-bottom:14px;align-items:center"><input type="checkbox" id="inAgree" style="width:auto"> I have read and agree to the exam rules.</label>
+      <button class="btn wide gold" onclick="startExam()">▶ Start test in secure mode</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXAM -->
+<div id="exam">
+  <div class="ex-top">
+    <div class="lg" id="exLogo"><span class="p">PS</span></div>
+    <div class="ti"><b id="exTitle">PS Kavach</b><span id="exStudent">—</span></div>
+    <div style="flex:1"></div>
+    <div class="ex-viol" id="exViol">Violations: 0 / 3</div>
+    <div class="clk"><small>OVERALL</small><span id="exClock">00:00</span></div>
+    <button class="btn gold sm" onclick="finishExam('manual')">Submit</button>
+  </div>
+  <div class="ex-body">
+    <div class="ex-main" id="exMain"></div>
+    <div class="ex-side">
+      <div class="sd-h">Question Navigator</div>
+      <div class="sd-scroll" id="exNav"></div>
+      <div class="ex-legend"><b><i style="background:var(--ok)"></i> Answered</b><b><i style="background:#fff;border:1.5px solid var(--line)"></i> Not visited</b><b><i style="background:var(--warn)"></i> For review</b></div>
+      <div class="sd-submit"><button class="btn wide" onclick="finishExam('manual')">Submit test</button></div>
+    </div>
+  </div>
+  <div class="ex-foot">
+    <button class="btn soft sm" id="exPrev" onclick="navQ(-1)">‹ Previous</button>
+    <button class="btn soft sm" onclick="flagQ()">⚑ Mark for review</button>
+    <div style="flex:1"></div>
+    <button class="btn sm" id="exNext" onclick="navQ(1)">Save & Next ›</button>
+  </div>
+</div>
+
+<!-- DONE -->
+<div class="screen" id="scDone">
+  <div class="panel">
+    <div class="ph" style="background:var(--ok)"><div class="lg"><span class="p" style="color:var(--ok)">✓</span></div><div><h2>Submitted</h2><p>Your responses are locked and on their way to evaluation</p></div></div>
+    <div class="pb"><div id="doneStats"></div>
+      <div class="note" style="margin:14px 0">Your diagnostic report will be built (auto-evaluation → analysis → PDF), filed to Google Drive and emailed to you via PS Mail XPRO.</div>
+      <button class="btn wide soft" onclick="location.reload()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="viol-flash" id="violFlash"></div>
+<div id="toast"></div>
+<div class="demo-badge" id="demoBadge" style="display:none">DEMO MODE — no backend connected</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="psk-client.js"></script>
+<script>
+/* ===== config ===== */
+const Q=new URLSearchParams(location.search);
+let ERP=Q.get('erp')||'';
+let TESTID=Q.get('test')||'';
+let CFG={college:{plat:'PS Kavach — AI-Powered Examination Platform',short:'DYP DPU',logo:'',brand:'#9c1c2e',brand2:'#c79a4b'},settings:{lockFull:true,lockReload:true,lockClip:true,lockTab:true,lockAds:true,lockDev:true,maxViol:3,secTimer:true,autosave:true,review:true}};
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m,t){const d=document.createElement('div');d.className='toast'+(t?' '+t:'');d.textContent=m;$('#toast').appendChild(d);setTimeout(()=>d.remove(),2600);}
+function showScreen(id){$$('.screen').forEach(s=>s.classList.remove('on'));$('#exam').classList.remove('on');if(id)$('#'+id).classList.add('on');}
+function theme(){document.documentElement.style.setProperty('--brand',CFG.college.brand);document.documentElement.style.setProperty('--brand-2',CFG.college.brand2);const lg=CFG.college.logo?`<img src="${CFG.college.logo}">`:'<span class="p">PS</span>';$('#enLogo').innerHTML=lg;$('#exLogo').innerHTML=lg;$('#enPlat').textContent=CFG.college.plat;}
+
+let TESTS=[],TEST=null,EX=null,overTimer=null,secTimer=null;
+const EXKEY=()=>'psk_exam_'+ERP+'_'+TESTID;
+
+/* ===== boot ===== */
+(async function boot(){
+  if(PSK.demo)$('#demoBadge').style.display='block';
+  try{const c=await PSK('config_get');if(c&&c.config)CFG=deepMerge(CFG,c.config);}catch(e){}
+  theme();
+  try{const r=await PSK('tests');TESTS=r.rows||[];}catch(e){TESTS=[];}
+  $('#enTest').innerHTML=TESTS.length?TESTS.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join(''):'<option value="demo">Demo Test — PGDM Sem I</option>';
+  if(ERP)$('#enErp').value=ERP;
+  if(TESTID)$('#enTest').value=TESTID;
+  // resume any in-progress attempt on load
+  resumeCheck();
+})();
+function deepMerge(a,b){for(const k in b){if(b[k]&&typeof b[k]==='object'&&!Array.isArray(b[k]))a[k]=deepMerge(a[k]||{},b[k]);else a[k]=b[k];}return a;}
+
+async function checkEntry(){
+  ERP=$('#enErp').value.trim();TESTID=$('#enTest').value;
+  if(!ERP)return toast('Enter your ERP number','bad');
+  TEST=await loadTest(TESTID);
+  if(!TEST)return toast('Test not found','bad');
+  // eligibility
+  let el;try{el=await PSK('eligibility',{erp:ERP,testId:TESTID});}catch(e){el={ok:true,eligible:true,name:'Student',checks:{registered:true,attendance:true,window:true}};}
+  renderElig(el);showScreen('scElig');
+}
+async function loadTest(id){
+  try{const r=await PSK('test',{id});if(r&&r.test)return normTest(r.test);}catch(e){}
+  return demoTest();
+}
+function normTest(t){t.sections=(t.sections||[]).map(s=>({id:s.id,heading:s.heading,time:Number(s.time)||10,questions:s.questions||[]}));return t;}
+function demoTest(){return{id:'demo',name:'Demo Test — PGDM Sem I',total:20,mode:'section',sections:[
+  {id:'a',heading:'Section A — MCQ',time:8,questions:[
+    {id:'q1',type:'mcq',q:'The 4 Ps of the marketing mix are Product, Price, Place and ___?',marks:2,options:['Promotion','People','Process','Packaging'],answer:0},
+    {id:'q2',type:'mcq',q:'Which pricing strategy sets a high initial price then lowers it over time?',marks:2,options:['Penetration','Price skimming','Loss leader','Bundle'],answer:1},
+    {id:'q3',type:'mcq',q:'SWOT stands for Strengths, Weaknesses, Opportunities and ___?',marks:2,options:['Trends','Threats','Tactics','Targets'],answer:1}]},
+  {id:'b',heading:'Section B — Short Answer',time:12,questions:[
+    {id:'q4',type:'oneline',q:'Name the ratio that measures short-term solvency.',marks:2,model:'current ratio'},
+    {id:'q5',type:'short',q:'Briefly explain the difference between leadership and management.',marks:4,model:'vision vs systems'},
+    {id:'q6',type:'short',q:'What is the break-even point and why does it matter?',marks:4,model:'TR=TC'}]}
+]};}
+
+function renderElig(el){
+  const c=el.checks||{registered:true,attendance:true,window:true};
+  const row=(ok,b,p)=>`<div class="elig ${ok?'':'no'}"><div class="ck">${ok?'✓':'✕'}</div><div><b>${b}</b><p>${p}</p></div></div>`;
+  $('#eligList').innerHTML=
+    row(c.registered!==false,'Registered student',el.name?esc(el.name):'ERP verified in master')+
+    row(c.attendance!==false,'Attendance marked','QR scanned by invigilator inside the window')+
+    row(c.window!==false,'Within exam window','Test is open for your session');
+  const ok=el.eligible!==false;
+  $('#eligBtn').disabled=!ok;$('#eligBtn').textContent=ok?'Continue to instructions ›':'Not eligible — '+(el.reason||'contact exam cell');
+  // instructions text
+  $('#inTitle').textContent=TEST.name+' • '+TEST.total+' minutes • '+TEST.sections.length+' sections';
+  $('#inList').innerHTML=[
+    'Secure proctored test — keep your window in view at all times.',
+    'Runs in <b>fullscreen</b>. Leaving fullscreen, switching tabs or minimising is a violation.',
+    '<b>Reloading will NOT restart your test</b> — you resume with the same answers and remaining time.',
+    'Right-click, copy, paste, print and developer tools are disabled.',
+    'After <b>'+CFG.settings.maxViol+'</b> violations the test auto-submits.',
+    TEST.mode==='section'?'Each section has its own timer and auto-advances when time ends.':'A single overall timer governs the whole test.'
+  ].map(x=>'<li>'+x+'</li>').join('');
+}
+
+/* ===== exam engine ===== */
+function buildItems(t){const items=[];const secs=t.sections.map(s=>({heading:s.heading,used:(s.time||10)*60,startIdx:0,count:0}));
+  t.sections.forEach((s,si)=>{const qs=(s.questions||[]).slice();if(!qs.length)qs.push({id:'p'+si,type:'short',q:'('+s.heading+') Sample question.',marks:2});secs[si].startIdx=items.length;secs[si].count=qs.length;qs.forEach(q=>items.push({...q,sec:si}));});
+  return{items,secs};}
+
+function startExam(){
+  if(CFG.settings.review!==undefined&&!$('#inAgree').checked)return toast('Please accept the exam rules','bad');
+  const{items,secs}=buildItems(TEST);
+  EX={erp:ERP,testId:TESTID,name:TEST.name,total:TEST.total,mode:TEST.mode,items,secs,idx:0,answers:{},flags:{},over:TEST.total*60,started:true,viol:0,submitted:false};
+  beginExamUI();persistEX();
+}
+function beginExamUI(){
+  $('#exTitle').textContent=CFG.college.plat;$('#exStudent').textContent=ERP+' — '+EX.name;
+  $('#exViol').textContent='Violations: '+EX.viol+' / '+CFG.settings.maxViol;
+  showScreen(null);$('#exam').classList.add('on');
+  enterLockdown();renderNav();renderQ(EX.idx);startTimers();
+  if(CFG.settings.autosave)setInterval(cloudSave,6000);
+}
+
+function enterLockdown(){
+  if(CFG.settings.lockFull){const el=document.documentElement;(el.requestFullscreen||el.webkitRequestFullscreen||(()=>{})).call(el).catch(()=>{});}
+  document.addEventListener('keydown',lockKeys,true);
+  document.addEventListener('contextmenu',blockCtx,true);
+  ['copy','paste','cut'].forEach(ev=>document.addEventListener(ev,blockClip,true));
+  document.addEventListener('visibilitychange',onVis);
+  window.addEventListener('blur',onBlur);
+  document.addEventListener('fullscreenchange',onFs);
+  window.addEventListener('beforeunload',onUnload);
+  if(CFG.settings.lockAds)startAdBlocker();
+}
+function exitLockdown(){document.removeEventListener('keydown',lockKeys,true);document.removeEventListener('contextmenu',blockCtx,true);['copy','paste','cut'].forEach(ev=>document.removeEventListener(ev,blockClip,true));document.removeEventListener('visibilitychange',onVis);window.removeEventListener('blur',onBlur);document.removeEventListener('fullscreenchange',onFs);window.removeEventListener('beforeunload',onUnload);if(adObs){adObs.disconnect();adObs=null;}if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});}
+function lockKeys(e){if(!EX||!EX.started||EX.submitted)return;const k=e.key.toLowerCase();
+  if(CFG.settings.lockReload&&(k==='f5'||((e.ctrlKey||e.metaKey)&&k==='r')||((e.ctrlKey||e.metaKey)&&e.shiftKey&&k==='r'))){e.preventDefault();e.stopPropagation();flashViol('Reload is disabled during the test');return false;}
+  if(CFG.settings.lockDev&&(k==='f12'||((e.ctrlKey||e.metaKey)&&e.shiftKey&&['i','j','c'].includes(k))||((e.ctrlKey||e.metaKey)&&k==='u'))){e.preventDefault();e.stopPropagation();flashViol('Developer tools are disabled');return false;}
+  if(CFG.settings.lockClip&&(e.ctrlKey||e.metaKey)&&['p','s'].includes(k)){e.preventDefault();return false;}
+  if(k==='backspace'&&!/input|textarea/i.test(e.target.tagName))e.preventDefault();}
+function blockCtx(e){if(CFG.settings.lockClip&&EX&&EX.started){e.preventDefault();return false;}}
+function blockClip(e){if(CFG.settings.lockClip&&EX&&EX.started&&!/textarea/i.test(e.target.tagName)){e.preventDefault();return false;}}
+function onVis(){if(document.hidden&&EX&&EX.started&&!EX.submitted&&CFG.settings.lockTab)addViol('You switched away from the test');}
+function onBlur(){if(EX&&EX.started&&!EX.submitted&&CFG.settings.lockTab)setTimeout(()=>{if(!document.hasFocus()&&!EX.submitted)addViol('Window lost focus');},300);}
+function onFs(){if(!document.fullscreenElement&&EX&&EX.started&&!EX.submitted&&CFG.settings.lockFull)addViol('You exited fullscreen');}
+function onUnload(e){if(EX&&EX.started&&!EX.submitted){persistEX();e.preventDefault();e.returnValue='Your test is in progress. It will resume, not restart.';return e.returnValue;}}
+let adObs=null;
+function startAdBlocker(){const bad=/(^|[^a-z])(ad|ads|adsbygoogle|banner|popup|sponsor|promo|overlay-ad|gpt-)/i;
+  const zap=n=>{if(n.nodeType!==1)return;const id=(n.id||'')+' '+(typeof n.className==='string'?n.className:'');if((n.tagName==='IFRAME'||n.tagName==='INS'||n.tagName==='ASIDE')&&!n.closest('#exam')&&bad.test(id)){n.remove();return;}if(bad.test(id)&&!n.closest('#exam')&&n.tagName!=='SCRIPT')n.remove();};
+  document.querySelectorAll('body > *').forEach(n=>{if(!['exam','toast','violFlash','demoBadge'].includes(n.id)&&n.tagName!=='SCRIPT')zap(n);});
+  adObs=new MutationObserver(m=>m.forEach(x=>x.addedNodes.forEach(zap)));adObs.observe(document.body,{childList:true,subtree:true});}
+function addViol(msg){EX.viol++;$('#exViol').textContent='Violations: '+EX.viol+' / '+CFG.settings.maxViol;flashViol('⚠ '+msg+' — '+EX.viol+' of '+CFG.settings.maxViol);persistEX();PSK('violation',{erp:ERP,testId:TESTID,reason:msg}).catch(()=>{});if(EX.viol>=CFG.settings.maxViol)finishExam('violations');}
+function flashViol(msg){const f=$('#violFlash');f.style.opacity=.5;setTimeout(()=>f.style.opacity=0,160);toast(msg,'bad');}
+
+function renderNav(){const nav=$('#exNav');const bySec={};EX.items.forEach((it,i)=>{(bySec[it.sec]=bySec[it.sec]||[]).push(i);});
+  nav.innerHTML=EX.secs.map((s,si)=>`<div class="ex-secgrp"><div class="lbl"><span class="bar"></span>${esc(s.heading)} <span class="cd" id="cd${si}"></span></div><div class="qgrid">${(bySec[si]||[]).map(i=>`<button class="qbtn" id="qb${i}" onclick="gotoQ(${i})">${i+1}</button>`).join('')}</div></div>`).join('');updateNav();}
+function updateNav(){EX.items.forEach((it,i)=>{const b=$('#qb'+i);if(!b)return;b.className='qbtn'+(EX.answers[i]!=null&&EX.answers[i]!==''?' ans':'')+(EX.flags[i]?' flag':'')+(i===EX.idx?' cur':'');});EX.secs.forEach((s,si)=>{const el=$('#cd'+si);if(el){let a=0;for(let i=s.startIdx;i<s.startIdx+s.count;i++)if(EX.answers[i]!=null&&EX.answers[i]!=='')a++;el.textContent=a+'/'+s.count;}});}
+function renderQ(i){EX.idx=i;const it=EX.items[i];const sec=EX.secs[it.sec];
+  const stimer=(CFG.settings.secTimer&&EX.mode==='section')?`<div class="stimer" id="secClock">${fmt(sec.used)}</div>`:'';
+  let a='';if(it.type==='mcq')a=(it.options||[]).map((o,oi)=>`<div class="ex-opt ${EX.answers[i]===oi?'sel':''}" onclick="pick(${i},${oi})"><div class="mk">${String.fromCharCode(65+oi)}</div><div class="ot">${esc(o)}</div></div>`).join('');
+  else a=`<div class="ex-answer"><textarea placeholder="Type your answer…" oninput="typeAns(${i},this.value)">${esc(EX.answers[i]||'')}</textarea></div>`;
+  $('#exMain').innerHTML=`<div class="ex-qcard"><div class="ex-sectionbar"><span class="sh">${esc(sec.heading)}</span><span class="st">Question ${i-sec.startIdx+1} of ${sec.count} in this section</span>${stimer}</div><div class="ex-qmeta">Q${i+1} • ${it.type==='mcq'?'Multiple choice':it.type==='oneline'?'One-line':'Short answer'} • ${it.marks} mark${it.marks>1?'s':''} ${EX.flags[i]?'• <span class="pill warn">flagged</span>':''}</div><div class="ex-qtext">${esc(it.q)}</div>${a}</div>`;
+  $('#exPrev').style.visibility=i===0?'hidden':'visible';$('#exNext').textContent=i===EX.items.length-1?'Review ›':'Save & Next ›';updateNav();}
+function pick(i,oi){EX.answers[i]=oi;persistEX();renderQ(i);}
+function typeAns(i,v){EX.answers[i]=v;persistEX();updateNav();}
+function gotoQ(i){renderQ(i);}
+function navQ(d){let n=EX.idx+d;if(n<0)n=0;if(n>=EX.items.length){finishExam('review');return;}renderQ(n);}
+function flagQ(){EX.flags[EX.idx]=!EX.flags[EX.idx];persistEX();renderQ(EX.idx);}
+
+function startTimers(){clearInterval(overTimer);clearInterval(secTimer);
+  overTimer=setInterval(()=>{EX.over--;$('#exClock').textContent=fmt(EX.over);if(EX.over<=0)finishExam('time');persistEX();},1000);
+  if(EX.mode==='section')secTimer=setInterval(()=>{const s=EX.secs[EX.items[EX.idx].sec];s.used--;const sc=$('#secClock');if(sc)sc.textContent=fmt(s.used);if(s.used<=0)autoAdv();},1000);}
+function autoAdv(){const cur=EX.items[EX.idx].sec;if(cur<EX.secs.length-1){toast('Section time up — next section','warn');renderQ(EX.secs[cur+1].startIdx);}else finishExam('time');}
+function fmt(s){s=Math.max(0,s);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+
+function persistEX(){if(EX)try{localStorage.setItem(EXKEY(),JSON.stringify(EX));}catch(e){}}
+function cloudSave(){if(!EX||EX.submitted)return;PSK('autosave',{erp:ERP,testId:TESTID,answers:JSON.stringify(EX.answers),idx:EX.idx,over:EX.over,viol:EX.viol}).catch(()=>{});}
+function resumeCheck(){
+  // look for any locally saved in-progress attempt for this erp/test
+  try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('psk_exam_')){const r=JSON.parse(localStorage.getItem(k));if(r&&r.started&&!r.submitted){ERP=r.erp;TESTID=r.testId;EX=r;TEST={name:r.name,total:r.total,mode:r.mode,sections:[]};beginExamUI();$('#exClock').textContent=fmt(EX.over);toast('Resumed your test — nothing was lost','ok');return;}}}}catch(e){}
+}
+
+async function finishExam(reason){
+  if((reason==='manual'||reason==='review')&&!confirm('Submit the test now? You cannot change answers after submitting.'))return;
+  if(!EX)return;EX.submitted=true;persistEX();clearInterval(overTimer);clearInterval(secTimer);exitLockdown();
+  let ans=0;EX.items.forEach((it,i)=>{if(EX.answers[i]!=null&&EX.answers[i]!=='')ans++;});
+  await PSK('submit',{erp:ERP,testId:TESTID,answers:JSON.stringify(EX.answers),answered:ans,viol:EX.viol,reason}).catch(()=>{});
+  try{localStorage.removeItem(EXKEY());}catch(e){}
+  const R={time:'Time expired',violations:'Auto-submitted after too many violations',manual:'Submitted by you',review:'Submitted by you'};
+  $('#doneStats').innerHTML=`<div style="display:flex;gap:20px"><div><div class="pill">Answered</div><div style="font-size:26px;font-weight:800">${ans}/${EX.items.length}</div></div><div><div class="pill">Violations</div><div style="font-size:26px;font-weight:800">${EX.viol}</div></div></div><p style="margin-top:12px;color:var(--ink-2)">${R[reason]||'Submitted'}</p>`;
+  showScreen('scDone');
+}
+</script>
+</body>
+</html>
