@@ -14,7 +14,7 @@
     it will be remembered in this browser.
     ============================================================ */
 (function () {
-  var BACKEND_URL = ''; // <-- paste your Apps Script Web-app /exec URL here
+  var BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzbilP2l7myjO5M8TuKyEwiuRA4oeqNXgYCW5eOYgJj_GlzgNqButOLsKZN4IVKuw5L/exec'; // your Apps Script Web-app /exec URL
 
   var q = new URLSearchParams(location.search);
   if (q.get('backend')) { BACKEND_URL = q.get('backend'); try { localStorage.setItem('psk_backend', BACKEND_URL); } catch (e) {} }
