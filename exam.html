@@ -91,7 +91,9 @@ input:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(1
     <div class="ph"><div class="lg" id="enLogo"><span class="p">PS</span></div><div><h2 id="enPlat">PS Kavach — Secure Exam</h2><p>Sign in to begin your test</p></div></div>
     <div class="pb">
       <div class="field"><label class="fl">Your ERP number</label><input type="text" id="enErp" placeholder="26700010"></div>
+      <div class="field"><label class="fl">Access code</label><input type="text" id="enCode" placeholder="6-character code from your email" style="text-transform:uppercase;letter-spacing:2px"></div>
       <div class="field"><label class="fl">Select test</label><select id="enTest"></select></div>
+      <div id="enErrMsg" style="color:var(--bad);font-size:12.5px;min-height:16px;margin-bottom:6px"></div>
       <button class="btn wide" onclick="checkEntry()">Continue ›</button>
       <div class="note" style="margin-top:14px">Your session is secured. If you have an unfinished attempt it will <b>resume</b>, not restart.</div>
     </div>
@@ -194,9 +196,17 @@ const EXKEY=()=>'psk_exam_'+ERP+'_'+TESTID;
 })();
 function deepMerge(a,b){for(const k in b){if(b[k]&&typeof b[k]==='object'&&!Array.isArray(b[k]))a[k]=deepMerge(a[k]||{},b[k]);else a[k]=b[k];}return a;}
 
+let ACCESS='';
 async function checkEntry(){
-  ERP=$('#enErp').value.trim();TESTID=$('#enTest').value;
+  ERP=$('#enErp').value.trim();ACCESS=$('#enCode').value.trim().toUpperCase();TESTID=$('#enTest').value;
+  $('#enErrMsg').textContent='';
   if(!ERP)return toast('Enter your ERP number','bad');
+  // verify ERP + access code against the backend (skipped in demo mode)
+  if(!PSK.demo){
+    try{const v=await PSK('verify_access',{erp:ERP,code:ACCESS});
+      if(!v||!v.ok){$('#enErrMsg').textContent=(v&&v.error)||'Access code check failed';return;}
+    }catch(e){$('#enErrMsg').textContent='Cannot reach server. Check your connection.';return;}
+  } else if(!ACCESS){ $('#enErrMsg').textContent='Enter the access code from your email.'; return; }
   TEST=await loadTest(TESTID);
   if(!TEST)return toast('Test not found','bad');
   // eligibility
