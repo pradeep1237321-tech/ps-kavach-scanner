@@ -77,6 +77,50 @@ input:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(1
 .ex-side .sd-submit{padding:12px 16px;border-top:1px solid var(--line)}
 @media(max-width:820px){.ex-body{grid-template-columns:1fr}.ex-side{display:none}}
 .viol-flash{position:fixed;inset:0;background:var(--bad);opacity:0;z-index:120;pointer-events:none;transition:opacity .1s}
+/* hearts (rule-break lives) */
+.ex-hearts{display:flex;gap:4px;align-items:center;background:rgba(0,0,0,.16);padding:5px 10px;border-radius:20px}
+.ex-hearts .cap{font-size:10px;font-weight:700;opacity:.85;margin-right:3px;letter-spacing:.04em}
+.ex-hearts .hrt{font-size:18px;line-height:1;display:inline-block}
+.ex-hearts .hrt.gone{filter:grayscale(1) opacity(.55)}
+@keyframes hbreak{0%{transform:scale(1)}20%{transform:scale(1.45) rotate(-10deg)}45%{transform:scale(.8) rotate(10deg)}70%{transform:scale(1.2) rotate(-4deg)}100%{transform:scale(1)}}
+.ex-hearts .hrt.breaking{animation:hbreak .55s ease}
+/* warning overlay */
+#warnOverlay{position:fixed;inset:0;z-index:130;display:none;align-items:center;justify-content:center;background:rgba(120,10,20,.28);backdrop-filter:blur(1px)}
+#warnOverlay.on{display:flex;animation:fadein .15s}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+#warnOverlay .wcard{background:#fff;border-radius:18px;max-width:380px;width:88%;padding:24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.35);border-top:6px solid var(--bad)}
+#warnOverlay .wheart{font-size:52px;animation:hbreak .6s ease}
+#warnOverlay h3{font-size:20px;color:var(--bad);margin:8px 0 6px}
+#warnOverlay p{font-size:14px;color:var(--ink-2);margin:0 0 12px}
+#warnOverlay .wlives{font-size:22px;letter-spacing:3px}
+/* submit review dialog */
+#subDlg{position:fixed;inset:0;z-index:140;display:none;align-items:center;justify-content:center;background:rgba(18,18,30,.5);padding:18px}
+#subDlg.on{display:flex}
+#subDlg .box{background:#fff;border-radius:16px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden}
+#subDlg .h{background:var(--brand);color:#fff;padding:16px 20px;font-size:17px;font-weight:700}
+#subDlg .b{padding:20px}
+#subDlg .big{display:flex;gap:14px;margin-bottom:14px}
+#subDlg .big .s{flex:1;text-align:center;background:var(--line-2);border-radius:12px;padding:12px}
+#subDlg .big .s .v{font-size:26px;font-weight:800}.s.warn .v{color:var(--warn)}.s.ok .v{color:var(--ok)}
+#subDlg .b .s .k{font-size:11px;color:var(--ink-2);font-weight:700;text-transform:uppercase}
+#subDlg .unl{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px;max-height:140px;overflow:auto}
+#subDlg .unl button{width:34px;height:34px;border:1.5px solid var(--warn);background:#fff;color:var(--warn);border-radius:8px;font-weight:800;font-size:12px}
+#subDlg .f{display:flex;gap:10px;padding:14px 20px;border-top:1px solid var(--line)}
+#subDlg .f .btn{flex:1;justify-content:center}
+/* phone question navigator */
+#navFab{display:none}
+@media(max-width:820px){
+  #navFab{display:inline-flex}
+  .ex-side.mobopen{display:flex;position:fixed;inset:auto 0 0 0;top:auto;height:70vh;z-index:60;border-top:2px solid var(--brand);border-left:0;box-shadow:0 -8px 30px rgba(0,0,0,.25);border-radius:16px 16px 0 0}
+  .ex-qtext{font-size:clamp(15px,4.2vw,18px)}
+  .ex-opt{padding:13px 14px}
+  .ex-foot{padding:10px 14px;gap:8px;flex-wrap:wrap}
+  .ex-foot .btn{font-size:12px;padding:8px 10px}
+}
+.ex-qtext{font-size:clamp(15px,2.2vw,18px)}
+.ex-opt .ot{font-size:clamp(13.5px,1.8vw,15px)}
+.ex-main{padding:clamp(16px,3vw,26px) clamp(14px,4vw,30px)}
+.ex-qcard{max-width:min(760px,100%)}
 #toast{position:fixed;right:20px;bottom:20px;z-index:200;display:flex;flex-direction:column;gap:9px}
 .toast{background:#23232e;color:#fff;padding:11px 15px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.28)}
 .toast.ok{background:#177245}.toast.bad{background:#b3323b}
@@ -129,7 +173,7 @@ input:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(1
     <div class="lg" id="exLogo"><span class="p">PS</span></div>
     <div class="ti"><b id="exTitle">PS Kavach</b><span id="exStudent">—</span></div>
     <div style="flex:1"></div>
-    <div class="ex-viol" id="exViol">Violations: 0 / 3</div>
+    <div class="ex-hearts" id="exHearts" title="Rule-break lives"><span class="cap">RULES</span></div>
     <div class="clk"><small>OVERALL</small><span id="exClock">00:00</span></div>
     <button class="btn gold sm" onclick="finishExam('manual')">Submit</button>
   </div>
@@ -144,11 +188,35 @@ input:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(1
   </div>
   <div class="ex-foot">
     <button class="btn soft sm" id="exPrev" onclick="navQ(-1)">‹ Previous</button>
-    <button class="btn soft sm" onclick="flagQ()">⚑ Mark for review</button>
+    <button class="btn soft sm" onclick="flagQ()">⚑ Review</button>
+    <button class="btn soft sm" id="navFab" onclick="toggleMobNav()">≣ Questions</button>
     <div style="flex:1"></div>
     <button class="btn sm" id="exNext" onclick="navQ(1)">Save & Next ›</button>
   </div>
 </div>
+
+<!-- rule-break warning -->
+<div id="warnOverlay"><div class="wcard"><div class="wheart">💔</div><h3 id="warnTitle">Warning</h3><p id="warnReason"></p><div class="wlives" id="warnLives"></div></div></div>
+
+<!-- submit review dialog -->
+<div id="subDlg"><div class="box">
+  <div class="h">Submit test?</div>
+  <div class="b">
+    <div class="big">
+      <div class="s ok"><div class="k">Answered</div><div class="v" id="dlgAns">0</div></div>
+      <div class="s warn"><div class="k">Unanswered</div><div class="v" id="dlgUn">0</div></div>
+    </div>
+    <div id="dlgUnWrap" style="display:none">
+      <div style="font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:2px">Unanswered questions — tap to jump:</div>
+      <div class="unl" id="dlgUnList"></div>
+    </div>
+    <p id="dlgMsg" style="font-size:13px;color:var(--ink-2);margin:8px 0 0"></p>
+  </div>
+  <div class="f">
+    <button class="btn soft" onclick="closeSubDlg()">Go back</button>
+    <button class="btn" id="dlgSubmitBtn" onclick="confirmSubmit()">Submit now</button>
+  </div>
+</div></div>
 
 <!-- DONE -->
 <div class="screen" id="scDone">
@@ -196,7 +264,8 @@ const EXKEY=()=>'psk_exam_'+ERP+'_'+TESTID;
 })();
 function deepMerge(a,b){for(const k in b){if(b[k]&&typeof b[k]==='object'&&!Array.isArray(b[k]))a[k]=deepMerge(a[k]||{},b[k]);else a[k]=b[k];}return a;}
 
-let ACCESS='';
+let ACCESS='',STUDENTNAME='Student';
+function firstName(){return String(STUDENTNAME||'Student').trim().split(/\s+/)[0]||'Student';}
 async function checkEntry(){
   ERP=$('#enErp').value.trim();ACCESS=$('#enCode').value.trim().toUpperCase();TESTID=$('#enTest').value;
   $('#enErrMsg').textContent='';
@@ -205,6 +274,7 @@ async function checkEntry(){
   if(!PSK.demo){
     try{const v=await PSK('verify_access',{erp:ERP,code:ACCESS});
       if(!v||!v.ok){$('#enErrMsg').textContent=(v&&v.error)||'Access code check failed';return;}
+      if(v.name)STUDENTNAME=v.name;
     }catch(e){$('#enErrMsg').textContent='Cannot reach server. Check your connection.';return;}
   } else if(!ACCESS){ $('#enErrMsg').textContent='Enter the access code from your email.'; return; }
   TEST=await loadTest(TESTID);
@@ -230,6 +300,7 @@ function demoTest(){return{id:'demo',name:'Demo Test — PGDM Sem I',total:20,mo
 ]};}
 
 function renderElig(el){
+  if(el&&el.name)STUDENTNAME=el.name;
   const c=el.checks||{registered:true,attendance:true,window:true};
   const row=(ok,b,p)=>`<div class="elig ${ok?'':'no'}"><div class="ck">${ok?'✓':'✕'}</div><div><b>${b}</b><p>${p}</p></div></div>`;
   $('#eligList').innerHTML=
@@ -262,11 +333,33 @@ function startExam(){
   beginExamUI();persistEX();
 }
 function beginExamUI(){
-  $('#exTitle').textContent=CFG.college.plat;$('#exStudent').textContent=ERP+' — '+EX.name;
-  $('#exViol').textContent='Violations: '+EX.viol+' / '+CFG.settings.maxViol;
+  $('#exTitle').textContent=CFG.college.plat;$('#exStudent').textContent=ERP+' — '+(STUDENTNAME&&STUDENTNAME!=='Student'?STUDENTNAME:EX.name);
+  renderHearts();
   showScreen(null);$('#exam').classList.add('on');
   enterLockdown();renderNav();renderQ(EX.idx);startTimers();
   if(CFG.settings.autosave)setInterval(cloudSave,6000);
+}
+function renderHearts(){
+  const total=CFG.settings.maxViol||3;let h='<span class="cap">RULES</span>';
+  for(let i=0;i<total;i++)h+='<span class="hrt'+(i<EX.viol?' gone':'')+'" id="hrt'+i+'">'+(i<EX.viol?'💔':'❤️')+'</span>';
+  $('#exHearts').innerHTML=h;
+}
+function breakHeart(i){const el=$('#hrt'+i);if(!el)return;el.classList.add('breaking');el.textContent='💔';setTimeout(()=>{el.classList.remove('breaking');el.classList.add('gone');},600);}
+const WARN_LINES=[
+  n=>`Why did you do that, ${n}?`,
+  n=>`That is not expected from you, ${n}.`,
+  n=>`${n}, please stay on the test screen.`,
+  n=>`This is your final warning, ${n}.`
+];
+function showWarn(reason,remaining){
+  const n=firstName(),total=CFG.settings.maxViol||3;
+  $('#warnTitle').textContent=WARN_LINES[Math.min(EX.viol-1,WARN_LINES.length-1)](n);
+  $('#warnReason').textContent=reason+' — this counts as a rule break.';
+  $('#warnLives').innerHTML=remaining>0?('Lives left: '+'❤️'.repeat(remaining)+'🖤'.repeat(total-remaining)):'No lives left — submitting your test now.';
+  const o=$('#warnOverlay');o.classList.add('on');
+  const f=$('#violFlash');f.style.opacity=.5;setTimeout(()=>f.style.opacity=0,160);
+  if(navigator.vibrate)navigator.vibrate([60,40,90]);
+  clearTimeout(showWarn._t);showWarn._t=setTimeout(()=>o.classList.remove('on'),remaining>0?1800:1300);
 }
 
 function enterLockdown(){
@@ -297,8 +390,15 @@ function startAdBlocker(){const bad=/(^|[^a-z])(ad|ads|adsbygoogle|banner|popup|
   const zap=n=>{if(n.nodeType!==1)return;const id=(n.id||'')+' '+(typeof n.className==='string'?n.className:'');if((n.tagName==='IFRAME'||n.tagName==='INS'||n.tagName==='ASIDE')&&!n.closest('#exam')&&bad.test(id)){n.remove();return;}if(bad.test(id)&&!n.closest('#exam')&&n.tagName!=='SCRIPT')n.remove();};
   document.querySelectorAll('body > *').forEach(n=>{if(!['exam','toast','violFlash','demoBadge'].includes(n.id)&&n.tagName!=='SCRIPT')zap(n);});
   adObs=new MutationObserver(m=>m.forEach(x=>x.addedNodes.forEach(zap)));adObs.observe(document.body,{childList:true,subtree:true});}
-function addViol(msg){EX.viol++;$('#exViol').textContent='Violations: '+EX.viol+' / '+CFG.settings.maxViol;flashViol('⚠ '+msg+' — '+EX.viol+' of '+CFG.settings.maxViol);persistEX();PSK('violation',{erp:ERP,testId:TESTID,reason:msg}).catch(()=>{});if(EX.viol>=CFG.settings.maxViol)finishExam('violations');}
-function flashViol(msg){const f=$('#violFlash');f.style.opacity=.5;setTimeout(()=>f.style.opacity=0,160);toast(msg,'bad');}
+function addViol(reason){
+  EX.viol++;persistEX();
+  const total=CFG.settings.maxViol||3, remaining=Math.max(0,total-EX.viol);
+  breakHeart(EX.viol-1);
+  showWarn(reason,remaining);
+  PSK('violation',{erp:ERP,testId:TESTID,reason:reason}).catch(()=>{});
+  if(EX.viol>=total)setTimeout(()=>finishExam('violations'),1400);
+}
+function flashViol(msg){const f=$('#violFlash');f.style.opacity=.4;setTimeout(()=>f.style.opacity=0,150);toast(msg,'bad');}
 
 function renderNav(){const nav=$('#exNav');const bySec={};EX.items.forEach((it,i)=>{(bySec[it.sec]=bySec[it.sec]||[]).push(i);});
   nav.innerHTML=EX.secs.map((s,si)=>`<div class="ex-secgrp"><div class="lbl"><span class="bar"></span>${esc(s.heading)} <span class="cd" id="cd${si}"></span></div><div class="qgrid">${(bySec[si]||[]).map(i=>`<button class="qbtn" id="qb${i}" onclick="gotoQ(${i})">${i+1}</button>`).join('')}</div></div>`).join('');updateNav();}
@@ -308,10 +408,11 @@ function renderQ(i){EX.idx=i;const it=EX.items[i];const sec=EX.secs[it.sec];
   let a='';if(it.type==='mcq')a=(it.options||[]).map((o,oi)=>`<div class="ex-opt ${EX.answers[i]===oi?'sel':''}" onclick="pick(${i},${oi})"><div class="mk">${String.fromCharCode(65+oi)}</div><div class="ot">${esc(o)}</div></div>`).join('');
   else a=`<div class="ex-answer"><textarea placeholder="Type your answer…" oninput="typeAns(${i},this.value)">${esc(EX.answers[i]||'')}</textarea></div>`;
   $('#exMain').innerHTML=`<div class="ex-qcard"><div class="ex-sectionbar"><span class="sh">${esc(sec.heading)}</span><span class="st">Question ${i-sec.startIdx+1} of ${sec.count} in this section</span>${stimer}</div><div class="ex-qmeta">Q${i+1} • ${it.type==='mcq'?'Multiple choice':it.type==='oneline'?'One-line':'Short answer'} • ${it.marks} mark${it.marks>1?'s':''} ${EX.flags[i]?'• <span class="pill warn">flagged</span>':''}</div><div class="ex-qtext">${esc(it.q)}</div>${a}</div>`;
-  $('#exPrev').style.visibility=i===0?'hidden':'visible';$('#exNext').textContent=i===EX.items.length-1?'Review ›':'Save & Next ›';updateNav();}
+  $('#exPrev').style.visibility=i===0?'hidden':'visible';$('#exNext').textContent=i===EX.items.length-1?'Review ›':'Save & Next ›';updateNav();
+  var m=$('#exMain');if(m)m.scrollTop=0;}
 function pick(i,oi){EX.answers[i]=oi;persistEX();renderQ(i);}
 function typeAns(i,v){EX.answers[i]=v;persistEX();updateNav();}
-function gotoQ(i){renderQ(i);}
+function gotoQ(i){$('.ex-side').classList.remove('mobopen');renderQ(i);}
 function navQ(d){let n=EX.idx+d;if(n<0)n=0;if(n>=EX.items.length){finishExam('review');return;}renderQ(n);}
 function flagQ(){EX.flags[EX.idx]=!EX.flags[EX.idx];persistEX();renderQ(EX.idx);}
 
@@ -328,9 +429,26 @@ function resumeCheck(){
   try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('psk_exam_')){const r=JSON.parse(localStorage.getItem(k));if(r&&r.started&&!r.submitted){ERP=r.erp;TESTID=r.testId;EX=r;TEST={name:r.name,total:r.total,mode:r.mode,sections:[]};beginExamUI();$('#exClock').textContent=fmt(EX.over);toast('Resumed your test — nothing was lost','ok');return;}}}}catch(e){}
 }
 
-async function finishExam(reason){
-  if((reason==='manual'||reason==='review')&&!confirm('Submit the test now? You cannot change answers after submitting.'))return;
-  if(!EX)return;EX.submitted=true;persistEX();clearInterval(overTimer);clearInterval(secTimer);exitLockdown();
+function finishExam(reason){
+  if(!EX||EX.submitted)return;
+  if(reason==='manual'||reason==='review'){openSubDlg();return;}
+  doSubmit(reason);
+}
+function openSubDlg(){
+  let ans=0;const un=[];EX.items.forEach((it,i)=>{if(EX.answers[i]!=null&&EX.answers[i]!=='')ans++;else un.push(i);});
+  $('#dlgAns').textContent=ans;$('#dlgUn').textContent=un.length;
+  if(un.length){$('#dlgUnWrap').style.display='block';$('#dlgUnList').innerHTML=un.map(i=>`<button onclick="jumpUn(${i})">${i+1}</button>`).join('');
+    $('#dlgMsg').textContent='You still have '+un.length+' unanswered question'+(un.length>1?'s':'')+'. Tap a number to answer it, or submit anyway.';$('#dlgSubmitBtn').textContent='Submit anyway';}
+  else{$('#dlgUnWrap').style.display='none';$('#dlgMsg').textContent='All questions answered. You are ready to submit.';$('#dlgSubmitBtn').textContent='Submit now';}
+  $('#subDlg').classList.add('on');
+}
+function closeSubDlg(){$('#subDlg').classList.remove('on');}
+function jumpUn(i){closeSubDlg();$('.ex-side').classList.remove('mobopen');renderQ(i);}
+function confirmSubmit(){closeSubDlg();doSubmit('manual');}
+function toggleMobNav(){$('.ex-side').classList.toggle('mobopen');}
+
+async function doSubmit(reason){
+  if(!EX||EX.submitted)return;EX.submitted=true;persistEX();clearInterval(overTimer);clearInterval(secTimer);exitLockdown();
   let ans=0;EX.items.forEach((it,i)=>{if(EX.answers[i]!=null&&EX.answers[i]!=='')ans++;});
   await PSK('submit',{erp:ERP,testId:TESTID,answers:JSON.stringify(EX.answers),answered:ans,viol:EX.viol,reason}).catch(()=>{});
   try{localStorage.removeItem(EXKEY());}catch(e){}
