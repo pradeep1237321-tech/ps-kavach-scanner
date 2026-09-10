@@ -1174,6 +1174,231 @@ function initAll(){applyTheme();loadCollege();loadEngine();loadReports();loadSet
 initAll();
 resumeEX(); // if a test was in progress and the page reloaded, resume it (do not restart)
 </script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* =====================================================================
+   ADMIN BACKEND MODULE — password gate, branding push, bulk questions
+   Talks to the unified Code.gs over JSONP. Works whether this admin is
+   served from GitHub Pages or from Apps Script (?page=admin).
+   ===================================================================== */
+(function(){
+  // Backend /exec URL: ?backend=.. wins, then localStorage, then this default.
+  var q=new URLSearchParams(location.search);
+  var BACKEND=q.get('backend')||localStorage.getItem('psk_backend')||
+    'https://script.google.com/macros/s/AKfycbzbilP2l7myjO5M8TuKyEwiuRA4oeqNXgYCW5eOYgJj_GlzgNqButOLsKZN4IVKuw5L/exec';
+  if(q.get('backend'))localStorage.setItem('psk_backend',BACKEND);
+  var ADMINPASS='';
+  var n=0;
+  function api(action,params){params=params||{};return new Promise(function(res,rej){
+    var cb='acb_'+Date.now()+'_'+(n++);var t=setTimeout(function(){clean();rej(new Error('timeout'));},15000);
+    window[cb]=function(d){clearTimeout(t);clean();res(d);};
+    function clean(){try{delete window[cb];}catch(e){}if(s&&s.parentNode)s.parentNode.removeChild(s);}
+    var url=BACKEND+(BACKEND.indexOf('?')<0?'?':'&')+'action='+encodeURIComponent(action)+'&callback='+cb;
+    Object.keys(params).forEach(function(k){url+='&'+encodeURIComponent(k)+'='+encodeURIComponent(params[k]);});
+    var s=document.createElement('script');s.src=url;s.onerror=function(){clearTimeout(t);clean();rej(new Error('network'));};document.head.appendChild(s);
+  });}
+  window.PSKB={api:function(a,p){return api(a,p);},pass:function(){return ADMINPASS;},backend:BACKEND};
+
+  /* ---------- style + login overlay ---------- */
+  var st=document.createElement('style');
+  st.textContent='#adminGate{position:fixed;inset:0;z-index:300;background:linear-gradient(135deg,#7a1424,#9c1c2e);display:none;align-items:center;justify-content:center;padding:20px}'+
+    '#adminGate.on{display:flex}#adminGate .box{background:#fff;border-radius:16px;max-width:380px;width:100%;padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center}'+
+    '#adminGate .lg{width:56px;height:56px;border-radius:14px;background:#9c1c2e;color:#fff;display:grid;place-items:center;font-weight:800;font-size:20px;margin:0 auto 12px}'+
+    '#adminGate h2{margin:0 0 4px;font-size:19px}#adminGate p{margin:0 0 16px;font-size:12.5px;color:#666}'+
+    '#adminGate input{width:100%;padding:11px 13px;border:1px solid #e7e7ee;border-radius:9px;font-size:15px;text-align:center;letter-spacing:2px;margin-bottom:12px}'+
+    '#adminGate .err{color:#d1414b;font-size:12.5px;min-height:16px;margin-bottom:8px}';
+  document.head.appendChild(st);
+  var gate=document.createElement('div');gate.id='adminGate';
+  gate.innerHTML='<div class="box"><div class="lg">PS</div><h2>Admin Login</h2><p>Enter the admin password to open the console.</p>'+
+    '<div class="err" id="gateErr"></div><input type="password" id="gatePass" placeholder="Password" autocomplete="off">'+
+    '<button class="btn wide" id="gateBtn">Unlock ›</button></div>';
+  document.body.appendChild(gate);
+  function showGate(){gate.classList.add('on');setTimeout(function(){document.getElementById('gatePass').focus();},100);}
+  function hideGate(){gate.classList.remove('on');}
+  document.getElementById('gateBtn').onclick=doLogin;
+  document.getElementById('gatePass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+  function doLogin(){
+    var p=document.getElementById('gatePass').value;
+    api('admin_login',{pass:p}).then(function(r){
+      if(r&&r.ok){ADMINPASS=p;hideGate();toast('Welcome, admin','ok');loadBranding();}
+      else document.getElementById('gateErr').textContent=(r&&r.error)||'Wrong password';
+    }).catch(function(){document.getElementById('gateErr').textContent='Cannot reach backend';});
+  }
+
+  /* ---------- boot: is the console password protected? ---------- */
+  api('branding_get').then(function(r){
+    if(r&&r.branding){ if(r.branding.hasPassword) showGate(); else loadBranding(); }
+  }).catch(function(){ /* backend unreachable — run locally, no gate */ });
+
+  function loadBranding(){
+    api('branding_get').then(function(r){
+      if(!r||!r.branding)return;var b=r.branding;
+      set('cfCollege',b.collegeName);set('cfShort',b.collegeShort);set('cfBatch',b.program);set('cfPlat',b.platform);
+      set('cfBrand',b.brand);set('cfBrand2',b.brand2);set('emLogoUrl',b.logoUrl);set('emSender',b.senderName);set('emPortal',b.reportPortal);
+      if(b.brand){C.college.brand=b.brand;}if(b.brand2){C.college.brand2=b.brand2;}applyTheme&&applyTheme();
+    }).catch(function(){});
+  }
+  function set(id,v){var el=document.getElementById(id);if(el&&v!=null)el.value=v;}
+
+  /* ---------- inject College Setup extras (email logo, sender, portal, password, push) ---------- */
+  function injectCollege(){
+    var view=document.getElementById('v-college');if(!view)return;
+    var card=document.createElement('div');card.className='card pad';card.style.marginTop='16px';
+    card.innerHTML='<div class="blocktitle"><span class="n">D</span> Email &amp; report branding (used in every mail)</div>'+
+      '<div class="grid g2">'+
+      '<div class="field"><label class="fl">Logo URL for emails (must be a public link)</label><input type="text" id="emLogoUrl" placeholder="https://…github.io/ps-kavach-scanner/logo.png"><div class="hint">Uploaded logos are fine on-screen, but Gmail strips them — emails need a hosted image URL. Put your logo in your GitHub repo and paste its link here.</div></div>'+
+      '<div class="field"><label class="fl">Email sender name (From)</label><input type="text" id="emSender" placeholder="DYP_DPU_EXAM_CELL"></div>'+
+      '<div class="field"><label class="fl">PS Mail XPRO / report portal URL</label><input type="text" id="emPortal" placeholder="https://…report portal link"></div>'+
+      '<div class="field"><label class="fl">Set / change admin password</label><input type="password" id="emAdminPass" placeholder="leave blank to keep current"><div class="hint">Protects this console. First time: type a password and Save.</div></div>'+
+      '</div>'+
+      '<div class="row" style="margin-top:6px"><button class="btn" id="pushBrandBtn">☁ Save branding to backend (emails)</button><span class="hint" id="brandMsg"></span></div>';
+    view.appendChild(card);
+    document.getElementById('pushBrandBtn').onclick=pushBranding;
+  }
+  function pushBranding(){
+    var data={collegeName:val('cfCollege'),collegeShort:val('cfShort'),program:val('cfBatch'),platform:val('cfPlat'),
+      brand:val('cfBrand'),brand2:val('cfBrand2'),logoUrl:val('emLogoUrl'),senderName:val('emSender'),reportPortal:val('emPortal')};
+    var ap=val('emAdminPass');if(ap)data.adminPass=ap;
+    document.getElementById('brandMsg').textContent='Saving…';
+    api('branding_set',{pass:ADMINPASS,data:JSON.stringify(data)}).then(function(r){
+      if(r&&r.ok){document.getElementById('brandMsg').textContent='Saved ✓';if(ap){ADMINPASS=ap;}toast('Branding saved to backend','ok');}
+      else{document.getElementById('brandMsg').textContent=(r&&r.error)||'Failed';toast((r&&r.error)||'Save failed','bad');}
+    }).catch(function(){document.getElementById('brandMsg').textContent='Backend unreachable';toast('Backend unreachable','bad');});
+  }
+  function val(id){var el=document.getElementById(id);return el?el.value:'';}
+
+  /* ================= QUESTION BANK — sheet columns + Excel/paste =================
+     Column order matches the QuestionBank sheet exactly:
+     QID | Subject | Section | Type | QuestionText | OptionA | OptionB | OptionC | OptionD | CorrectOption | ModelAnswer | Marks
+  */
+  var QCOLS=['QID','Subject','Section','Type','QuestionText','OptionA','OptionB','OptionC','OptionD','CorrectOption','ModelAnswer','Marks'];
+  function injectBulk(){
+    var bank=document.getElementById('tb-bank');if(!bank)return;
+    var bar=bank.querySelector('.row');if(bar){var b=document.createElement('button');b.className='btn sm gold';b.textContent='⬆ Bulk upload';b.onclick=openBulk;bar.querySelector('div:last-child').appendChild(b);}
+  }
+  window.openBulk=function(){
+    modal('Bulk upload questions',
+      '<div class="note" style="margin-bottom:10px"><span class="i">◆</span><div>Columns (same as the QuestionBank sheet): <b>QID · Subject · Section · Type · QuestionText · OptionA · OptionB · OptionC · OptionD · CorrectOption · ModelAnswer · Marks</b>.<br>Type = <b>mcq</b> / <b>oneline</b> / <b>short</b>. For mcq fill the options + CorrectOption (A/B/C/D). For oneline/short fill ModelAnswer and leave options blank. QID is optional (auto-made).</div></div>'+
+      '<div class="row" style="margin-bottom:10px"><button class="btn sm soft" onclick="dlQTemplate()">⬇ Download Excel template</button>'+
+      '<label class="btn sm soft" style="cursor:pointer">⬆ Upload filled Excel<input type="file" id="qXlsx" accept=".xlsx,.xls,.csv" style="display:none" onchange="qExcel(event)"></label></div>'+
+      '<p class="hint" style="margin-bottom:6px">…or paste rows straight from Excel/Sheets (Tab-separated, no header):</p>'+
+      '<textarea id="bulkIn" style="min-height:150px;font-family:ui-monospace,monospace;font-size:12px" placeholder="Q1&#9;Marketing&#9;Section A&#9;mcq&#9;The 4 Ps are Product, Price, Place and __?&#9;Promotion&#9;People&#9;Process&#9;Packaging&#9;A&#9;&#9;2"></textarea>'+
+      '<div class="row" style="margin-top:8px"><label class="row" style="gap:6px;font-size:12.5px"><input type="checkbox" id="bulkSync" checked style="width:auto"> Also save to backend Sheet</label></div>'+
+      '<div id="bulkMsg" class="hint" style="margin-top:6px"></div>',
+      '<button class="btn soft" onclick="closeModal()">Cancel</button><button class="btn" onclick="doBulkPaste()">Import pasted</button>');
+  };
+  // rows = array of arrays in QCOLS order (no header). Returns internal question items.
+  function parseQuestionRows(rows){
+    var items=[];
+    rows.forEach(function(c){
+      if(!c || !c.length) return;
+      var type=String(c[3]||'mcq').trim().toLowerCase();
+      var qtext=String(c[4]||'').trim(); if(!qtext) return;
+      var opts=[c[5],c[6],c[7],c[8]].map(function(x){return String(x==null?'':x).trim();}).filter(Boolean);
+      var letter=String(c[9]||'').trim().toUpperCase();
+      var item={id:String(c[0]||'').trim()||uid(), subject:String(c[1]||'').trim(), section:String(c[2]||'').trim(),
+        type:type, q:qtext, options:opts, correct:letter||'', answer:Math.max(0,'ABCD'.indexOf(letter||'A')),
+        model:String(c[10]||'').trim(), marks:+(c[11]||1)||1};
+      items.push(item);
+    });
+    return items;
+  }
+  function importQuestions(items,sync,msgEl){
+    if(!items.length){toast('No valid rows found','bad');return;}
+    C.bank.push.apply(C.bank,items);save();renderBank();
+    if(sync){ if(msgEl)msgEl.textContent='Saving '+items.length+' to backend…';
+      pushBankChunks(items,0,function(ok){if(msgEl)msgEl.textContent=ok?('Imported '+items.length+' ✓ (local + backend)'):'Saved locally; backend failed';toast('Imported '+items.length+' questions','ok');setTimeout(closeModal,900);});
+    } else {toast('Imported '+items.length+' questions (local)','ok');closeModal();}
+  }
+  window.doBulkPaste=function(){
+    var raw=document.getElementById('bulkIn').value.trim();if(!raw)return toast('Paste some rows first','bad');
+    var rows=raw.split('\n').filter(function(l){return l.trim();}).map(function(l){return l.split('\t');});
+    importQuestions(parseQuestionRows(rows), document.getElementById('bulkSync').checked, document.getElementById('bulkMsg'));
+  };
+  window.qExcel=function(ev){
+    var f=ev.target.files[0];if(!f)return;var rd=new FileReader();
+    rd.onload=function(e){try{
+      var wb=XLSX.read(e.target.result,{type:'array'});var ws=wb.Sheets[wb.SheetNames[0]];
+      var aoa=XLSX.utils.sheet_to_json(ws,{header:1});
+      // drop header row if it looks like headers
+      if(aoa.length && String(aoa[0][3]||'').toLowerCase().indexOf('type')>=0) aoa=aoa.slice(1);
+      else if(aoa.length && String(aoa[0][0]||'').toLowerCase()==='qid') aoa=aoa.slice(1);
+      importQuestions(parseQuestionRows(aoa), true, document.getElementById('bulkMsg'));
+    }catch(err){toast('Could not read file: '+err.message,'bad');}};
+    rd.readAsArrayBuffer(f);
+  };
+  window.dlQTemplate=function(){
+    var aoa=[QCOLS,
+      ['Q1','Marketing','Section A','mcq','The 4 Ps are Product, Price, Place and __?','Promotion','People','Process','Packaging','A','',2],
+      ['Q2','Finance','Section B','short','Explain the break-even point.','','','','','','TR = TC; no profit, no loss',4]];
+    downloadSheet(aoa,'PS_Kavach_QuestionBank_Template');
+  };
+  function pushBankChunks(items,i,done){
+    if(i>=items.length){done(true);return;}
+    var chunk=items.slice(i,i+8);
+    api('bank_add',{pass:ADMINPASS,items:JSON.stringify(chunk)}).then(function(r){ if(r&&r.ok)pushBankChunks(items,i+8,done);else done(false); }).catch(function(){done(false);});
+  }
+
+  /* ================= REGISTRATION — Excel template / upload ================= */
+  var SCOLS=['Name','ERP','Specialization','Division','Email','Program','College'];
+  function injectRegistration(){
+    var view=document.getElementById('v-registration');if(!view)return;
+    var bar=view.querySelector('.row .row')||view.querySelector('.row');if(!bar)return;
+    var tpl=document.createElement('button');tpl.className='btn sm soft';tpl.textContent='⬇ Excel template';tpl.onclick=dlStudentTemplate;
+    var up=document.createElement('label');up.className='btn sm soft';up.style.cursor='pointer';up.innerHTML='⬆ Upload Excel<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="studentExcel(event)">';
+    bar.insertBefore(up,bar.firstChild);bar.insertBefore(tpl,bar.firstChild);
+  }
+  window.dlStudentTemplate=function(){
+    var aoa=[SCOLS,
+      ['Shruti Sharma','26700010','Marketing','A','shruti@example.com','PGDM 2026-28','DYP B-School'],
+      ['Aditya Rao','26700011','Finance','A','aditya@example.com','PGDM 2026-28','DYP B-School']];
+    downloadSheet(aoa,'PS_Kavach_Students_Template');
+  };
+  window.studentExcel=function(ev){
+    var f=ev.target.files[0];if(!f)return;var rd=new FileReader();
+    rd.onload=function(e){try{
+      var wb=XLSX.read(e.target.result,{type:'array'});var ws=wb.Sheets[wb.SheetNames[0]];
+      var aoa=XLSX.utils.sheet_to_json(ws,{header:1});
+      if(aoa.length && String(aoa[0][1]||'').toLowerCase()==='erp') aoa=aoa.slice(1);
+      var items=[];
+      aoa.forEach(function(c){var erp=String(c[1]==null?'':c[1]).trim();if(!erp)return;
+        items.push({name:String(c[0]||'').trim(),erp:erp,specialization:String(c[2]||'').trim(),division:String(c[3]||'').trim(),
+          email:String(c[4]||'').trim(),program:String(c[5]||'').trim(),college:String(c[6]||'').trim(),batch:String(c[5]||'').trim(),eligible:true,id:uid()});
+      });
+      if(!items.length)return toast('No student rows found','bad');
+      // reflect locally (skip ERPs already present)
+      var have={};C.students.forEach(function(s){have[String(s.erp).trim()]=true;});
+      var fresh=items.filter(function(s){return !have[s.erp];});
+      C.students.push.apply(C.students,fresh);save();renderStudents();
+      toast('Loaded '+fresh.length+' students — saving to backend…','ok');
+      // push to backend
+      studentChunks(items,0,function(added,skipped,ok){
+        toast(ok?('Backend: added '+added+', skipped '+skipped+' (already there)'):'Saved locally; backend not reachable', ok?'ok':'bad');
+      });
+    }catch(err){toast('Could not read file: '+err.message,'bad');}};
+    rd.readAsArrayBuffer(f);ev.target.value='';
+  };
+  function studentChunks(items,i,done,acc){
+    acc=acc||{added:0,skipped:0};
+    if(i>=items.length){done(acc.added,acc.skipped,true);return;}
+    var chunk=items.slice(i,i+12);
+    api('students_add',{pass:ADMINPASS,items:JSON.stringify(chunk)}).then(function(r){
+      if(r&&r.ok){acc.added+=(r.added||0);acc.skipped+=(r.skipped||0);studentChunks(items,i+12,done,acc);}
+      else done(acc.added,acc.skipped,false);
+    }).catch(function(){done(acc.added,acc.skipped,false);});
+  }
+
+  /* shared: build + download an .xlsx (falls back to CSV if SheetJS missing) */
+  function downloadSheet(aoa,name){
+    if(window.XLSX){var wb=XLSX.utils.book_new();var ws=XLSX.utils.aoa_to_sheet(aoa);XLSX.utils.book_append_sheet(wb,ws,'Template');XLSX.writeFile(wb,name+'.xlsx');return;}
+    var csv=aoa.map(function(r){return r.map(function(c){var v=String(c==null?'':c);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(',');}).join('\n');
+    var b=new Blob([csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name+'.csv';a.click();
+  }
+
+  /* run injections after the base UI exists */
+  injectCollege();injectBulk();injectRegistration();
+})();
+</script>
 </body>
 </html>
-
