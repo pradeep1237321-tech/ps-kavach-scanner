@@ -87,7 +87,7 @@ input:focus,select:focus{border-color:var(--brand)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script>
 /* ===== backend (paste your Apps Script /exec URL, or open with ?backend=...) ===== */
-var BACKEND = 'PASTE_YOUR_/exec_URL_HERE';
+var BACKEND = 'https://script.google.com/macros/s/AKfycbzbilP2l7myjO5M8TuKyEwiuRA4oeqNXgYCW5eOYgJj_GlzgNqButOLsKZN4IVKuw5L/exec';
 (function(){ var q=new URLSearchParams(location.search);
   if(q.get('backend')){BACKEND=q.get('backend');try{localStorage.setItem('psk_be',BACKEND);}catch(e){}}
   else { try{ var s=localStorage.getItem('psk_be'); if(s)BACKEND=s; }catch(e){} }
