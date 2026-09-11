@@ -93,31 +93,35 @@ var DEMO = (BACKEND.indexOf('http')!==0);
 if(DEMO) document.getElementById('demo').style.display='block';
 
 var cbN=0;
-function api(params){ return new Promise(function(res,rej){
+function apiOnce(params,timeoutMs){ return new Promise(function(res,rej){
   if(DEMO){ return rej(new Error('demo')); }
-  var cb='scb_'+Date.now()+'_'+(cbN++); var t=setTimeout(function(){clean();rej(new Error('timeout'));},20000);
+  var cb='scb_'+Date.now()+'_'+(cbN++); var t=setTimeout(function(){clean();rej(new Error('timeout'));},timeoutMs||25000);
   window[cb]=function(d){clearTimeout(t);clean();res(d);};
   function clean(){try{delete window[cb];}catch(e){}if(s&&s.parentNode)s.parentNode.removeChild(s);}
-  var url=BACKEND+(BACKEND.indexOf('?')<0?'?':'&')+'callback='+cb;
+  var url=BACKEND+(BACKEND.indexOf('?')<0?'?':'&')+'callback='+cb+'&_='+Date.now();
   Object.keys(params).forEach(function(k){url+='&'+encodeURIComponent(k)+'='+encodeURIComponent(params[k]);});
   var s=document.createElement('script'); s.src=url; s.onerror=function(){clearTimeout(t);clean();rej(new Error('network'));};
   document.head.appendChild(s);
 });}
+function api(params){ return apiOnce(params,25000).catch(function(){return apiOnce(params,35000);}); }
 
 function $(id){return document.getElementById(id);}
 function toast(m,t){var d=document.createElement('div');d.className='toast'+(t?' '+t:'');d.textContent=m;$('toast').appendChild(d);setTimeout(function(){d.remove();},2400);}
 
 var PIN='', marks=[];
 function signIn(){
-  PIN=$('pin').value.trim(); if(!PIN)return;
-  $('pinMsg').textContent=''; var sb=$('signBtn');sb.disabled=true;sb.textContent='Connecting…';
-  if(DEMO){ sb.disabled=false;sb.textContent='Sign in ▸';startScannerUI([{id:'MASTER',title:'Master (all live tests)'}]); return; }
+  PIN=$('pin').value.trim(); if(!PIN){$('pinMsg').textContent='Enter the attendance PIN.';return;}
+  var sb=$('signBtn'); function ready(){sb.disabled=false;sb.textContent='Sign in ▸';}
+  $('pinMsg').textContent='Connecting securely…'; $('pinMsg').style.color='var(--ink2)';sb.disabled=true;sb.textContent='Connecting…';
+  if(DEMO){ready();startScannerUI([{id:'MASTER',title:'Master (all live tests)'}]);return;}
   api({api:'scanContext',pin:PIN}).then(function(r){
-    if(!r||!r.ok){ sb.disabled=false;sb.textContent='Sign in ▸';$('pinMsg').textContent='Wrong PIN'; return; }
+    if(!r||!r.ok){ready();var reason=(r&&r.reason)||'pin';var message=(reason==='pin'||reason==='missing-pin')?'Incorrect attendance PIN.':reason==='not-configured'?'Attendance PIN is not configured in Admin.':((r&&r.msg)||'Scanner service is temporarily unavailable. Please retry.');$('pinMsg').style.color='var(--bad)';$('pinMsg').textContent=message;return;}
+    $('pinMsg').textContent='';
     var tests=[{id:'MASTER',title:'Master — all live tests'}].concat((r.liveTests||[]).map(function(t){return {id:t.id,title:t.title};}));
     startScannerUI(tests);
-  }).catch(function(){ sb.disabled=false;sb.textContent='Sign in ▸';$('pinMsg').textContent='Cannot reach server. Check the backend URL.'; });
+  }).catch(function(){ready();$('pinMsg').style.color='var(--bad)';$('pinMsg').textContent='Server did not respond after two attempts. Check internet and retry.';});
 }
+
 function startScannerUI(tests){
   $('who').textContent='Invigilator';
   $('pinCard').style.display='none';$('scanCard').style.display='block';$('listCard').style.display='block';
