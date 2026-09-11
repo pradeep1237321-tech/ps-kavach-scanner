@@ -48,9 +48,9 @@ input:focus,select:focus{border-color:var(--brand)}
   <!-- PIN -->
   <div class="card" id="pinCard">
     <label class="fl">Attendance PIN</label>
-    <input type="text" id="pin" inputmode="numeric" placeholder="Enter the PIN set by admin" onkeydown="if(event.key==='Enter')signIn()">
+    <input type="password" id="pin" inputmode="numeric" autocomplete="current-password" placeholder="Enter the PIN set by admin" onkeydown="if(event.key==='Enter')signIn()">
     <div class="msg" id="pinMsg"></div>
-    <button class="btn wide" style="margin-top:10px" onclick="signIn()">Sign in ▸</button>
+    <button class="btn wide" id="signBtn" style="margin-top:10px" onclick="signIn()">Sign in ▸</button>
     <div class="note" style="margin-top:12px">The PIN is set in Admin (Config → ScanPIN). This scanner runs on your phone/laptop camera and marks attendance instantly.</div>
   </div>
 
@@ -88,17 +88,14 @@ input:focus,select:focus{border-color:var(--brand)}
 <script>
 /* ===== backend (paste your Apps Script /exec URL, or open with ?backend=...) ===== */
 var BACKEND = 'https://script.google.com/macros/s/AKfycbzbilP2l7myjO5M8TuKyEwiuRA4oeqNXgYCW5eOYgJj_GlzgNqButOLsKZN4IVKuw5L/exec';
-(function(){ var q=new URLSearchParams(location.search);
-  if(q.get('backend')){BACKEND=q.get('backend');try{localStorage.setItem('psk_be',BACKEND);}catch(e){}}
-  else { try{ var s=localStorage.getItem('psk_be'); if(s)BACKEND=s; }catch(e){} }
-})();
+(function(){ var q=new URLSearchParams(location.search); if(q.get('backend')) BACKEND=q.get('backend'); })();
 var DEMO = (BACKEND.indexOf('http')!==0);
 if(DEMO) document.getElementById('demo').style.display='block';
 
 var cbN=0;
 function api(params){ return new Promise(function(res,rej){
   if(DEMO){ return rej(new Error('demo')); }
-  var cb='scb_'+Date.now()+'_'+(cbN++); var t=setTimeout(function(){clean();rej(new Error('timeout'));},12000);
+  var cb='scb_'+Date.now()+'_'+(cbN++); var t=setTimeout(function(){clean();rej(new Error('timeout'));},20000);
   window[cb]=function(d){clearTimeout(t);clean();res(d);};
   function clean(){try{delete window[cb];}catch(e){}if(s&&s.parentNode)s.parentNode.removeChild(s);}
   var url=BACKEND+(BACKEND.indexOf('?')<0?'?':'&')+'callback='+cb;
@@ -113,13 +110,13 @@ function toast(m,t){var d=document.createElement('div');d.className='toast'+(t?'
 var PIN='', marks=[];
 function signIn(){
   PIN=$('pin').value.trim(); if(!PIN)return;
-  $('pinMsg').textContent='';
-  if(DEMO){ startScannerUI([{id:'MASTER',title:'Master (all live tests)'}]); return; }
+  $('pinMsg').textContent=''; var sb=$('signBtn');sb.disabled=true;sb.textContent='Connecting…';
+  if(DEMO){ sb.disabled=false;sb.textContent='Sign in ▸';startScannerUI([{id:'MASTER',title:'Master (all live tests)'}]); return; }
   api({api:'scanContext',pin:PIN}).then(function(r){
-    if(!r||!r.ok){ $('pinMsg').textContent='Wrong PIN'; return; }
+    if(!r||!r.ok){ sb.disabled=false;sb.textContent='Sign in ▸';$('pinMsg').textContent='Wrong PIN'; return; }
     var tests=[{id:'MASTER',title:'Master — all live tests'}].concat((r.liveTests||[]).map(function(t){return {id:t.id,title:t.title};}));
     startScannerUI(tests);
-  }).catch(function(){ $('pinMsg').textContent='Cannot reach server. Check the backend URL.'; });
+  }).catch(function(){ sb.disabled=false;sb.textContent='Sign in ▸';$('pinMsg').textContent='Cannot reach server. Check the backend URL.'; });
 }
 function startScannerUI(tests){
   $('who').textContent='Invigilator';
@@ -162,11 +159,10 @@ function hit(code){ var now=Date.now(); var erp=(String(code).split('|')[0]||cod
 function mark(raw){
   var erp=String(raw).trim().toUpperCase();
   if(marks.some(function(m){return m.erp===erp && m.ok;})){ toast(erp+' already marked','warn'); return; }
-  beep(); if(navigator.vibrate)navigator.vibrate(60); flash();
   var testId=$('testSel').value;
-  if(DEMO){ addMark(erp,'Demo Student',true,'demo'); return; }
+  if(DEMO){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();addMark(erp,'Demo Student',true,'demo'); return; }
   api({api:'scanMark',pin:PIN,testId:testId,erp:erp}).then(function(r){
-    if(r&&r.ok){ addMark(erp,r.name||erp,true,(r.marked||0)+' test(s)'); showHit(r.name||erp,(r.spec||'')+' · '+(r.marked||0)+' marked'); }
+    if(r&&r.ok){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();addMark(erp,r.name||erp,true,(r.marked||0)+' test(s)'); showHit(r.name||erp,(r.spec||'')+' · '+(r.marked||0)+' marked'); }
     else { addMark(erp,(r&&r.name)||erp,false,(r&&r.msg)||'rejected'); toast((r&&r.msg)||'Rejected','bad'); }
   }).catch(function(){ addMark(erp,erp,false,'network'); toast('Network error','bad'); });
 }
