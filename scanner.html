@@ -4,12 +4,13 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PS Kavach — Fast Attendance Scanner</title>
 <style>
-:root{--brand:#9c1c2e;--brand-d:#7a1424;--gold:#c79a4b;--ink:#20202a;--ink2:#5a5a66;--line:#e7e1d8;--bg:#f4f1ec;--ok:#1f7a45;--bad:#c0392b;}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+:root{--brand:#b12b36;--brand-d:#861f28;--gold:#d0a050;--ink:#20202a;--ink2:#5a5a66;--line:#e7e1d8;--bg:#f4f1ec;--ok:#1f7a45;--bad:#c0392b;}
 *{box-sizing:border-box}html,body{margin:0}
-body{font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;}
+body{font-family:Inter,system-ui,-apple-system,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;}
 .top{background:linear-gradient(90deg,var(--brand-d),var(--brand));color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10}
 .top b{font-size:15px}.top .who{margin-left:auto;font-size:12px;opacity:.9;text-align:right}
-.wrap{max-width:720px;margin:0 auto;padding:14px}
+.wrap{max-width:820px;margin:0 auto;padding:14px}
 .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
 label.fl{display:block;font-size:12px;font-weight:700;color:var(--ink2);margin-bottom:5px}
 input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:#fbfaf8;outline:none;font-size:15px}
@@ -47,7 +48,7 @@ input:focus,select:focus{border-color:var(--brand)}
 
   <!-- PIN -->
   <div class="card" id="pinCard">
-    <label class="fl">Attendance PIN</label>
+    <label class="fl">Invigilator name</label><input type="text" id="invig" autocomplete="name" placeholder="Faculty / Invigilator name"><div style="height:10px"></div><label class="fl">Attendance PIN</label>
     <input type="password" id="pin" inputmode="numeric" autocomplete="current-password" placeholder="Enter the PIN set by admin" onkeydown="if(event.key==='Enter')signIn()">
     <div class="msg" id="pinMsg"></div>
     <button class="btn wide" id="signBtn" style="margin-top:10px" onclick="signIn()">Sign in ▸</button>
@@ -108,22 +109,22 @@ function api(params){ return apiOnce(params,25000).catch(function(){return apiOn
 function $(id){return document.getElementById(id);}
 function toast(m,t){var d=document.createElement('div');d.className='toast'+(t?' '+t:'');d.textContent=m;$('toast').appendChild(d);setTimeout(function(){d.remove();},2400);}
 
-var PIN='', marks=[];
+var PIN='', INVIG='', marks=[];
 function signIn(){
-  PIN=$('pin').value.trim(); if(!PIN){$('pinMsg').textContent='Enter the attendance PIN.';return;}
+  INVIG=$('invig').value.trim()||'Invigilator'; PIN=$('pin').value.trim(); if(!PIN){$('pinMsg').textContent='Enter the attendance PIN.';return;}
   var sb=$('signBtn'); function ready(){sb.disabled=false;sb.textContent='Sign in ▸';}
   $('pinMsg').textContent='Connecting securely…'; $('pinMsg').style.color='var(--ink2)';sb.disabled=true;sb.textContent='Connecting…';
-  if(DEMO){ready();startScannerUI([{id:'MASTER',title:'Master (all live tests)'}]);return;}
+  if(DEMO){ready();startScannerUI([{id:'MASTER',title:'Master (all scanner-open tests)'}]);return;}
   api({api:'scanContext',pin:PIN}).then(function(r){
     if(!r||!r.ok){ready();var reason=(r&&r.reason)||'pin';var message=(reason==='pin'||reason==='missing-pin')?'Incorrect attendance PIN.':reason==='not-configured'?'Attendance PIN is not configured in Admin.':((r&&r.msg)||'Scanner service is temporarily unavailable. Please retry.');$('pinMsg').style.color='var(--bad)';$('pinMsg').textContent=message;return;}
     $('pinMsg').textContent='';
-    var tests=[{id:'MASTER',title:'Master — all live tests'}].concat((r.liveTests||[]).map(function(t){return {id:t.id,title:t.title};}));
+    var tests=[{id:'MASTER',title:'Master — all scanner-open tests'}].concat((r.liveTests||[]).map(function(t){return {id:t.id,title:t.title};}));
     startScannerUI(tests);
   }).catch(function(){ready();$('pinMsg').style.color='var(--bad)';$('pinMsg').textContent='Server did not respond after two attempts. Check internet and retry.';});
 }
 
 function startScannerUI(tests){
-  $('who').textContent='Invigilator';
+  $('who').textContent=INVIG;
   $('pinCard').style.display='none';$('scanCard').style.display='block';$('listCard').style.display='block';
   $('testSel').innerHTML=tests.map(function(t){return '<option value="'+t.id+'">'+t.title+'</option>';}).join('');
 }
@@ -165,7 +166,7 @@ function mark(raw){
   if(marks.some(function(m){return m.erp===erp && m.ok;})){ toast(erp+' already marked','warn'); return; }
   var testId=$('testSel').value;
   if(DEMO){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();addMark(erp,'Demo Student',true,'demo'); return; }
-  api({api:'scanMark',pin:PIN,testId:testId,erp:erp}).then(function(r){
+  api({api:'scanMark',pin:PIN,testId:testId,erp:erp,name:INVIG}).then(function(r){
     if(r&&r.ok){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();addMark(erp,r.name||erp,true,(r.marked||0)+' test(s)'); showHit(r.name||erp,(r.spec||'')+' · '+(r.marked||0)+' marked'); }
     else { addMark(erp,(r&&r.name)||erp,false,(r&&r.msg)||'rejected'); toast((r&&r.msg)||'Rejected','bad'); }
   }).catch(function(){ addMark(erp,erp,false,'network'); toast('Network error','bad'); });
