@@ -40,6 +40,8 @@ input:focus,select:focus{border-color:var(--brand)}
 #toast{position:fixed;right:14px;bottom:14px;z-index:60;display:flex;flex-direction:column;gap:8px}
 .toast{background:#23232e;color:#fff;padding:10px 14px;border-radius:9px;font-size:13px;font-weight:600}
 .toast.ok{background:#177245}.toast.bad{background:#b3323b}.toast.warn{background:#a5701a}
+
+.tabs2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.tabs2 button{border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:10px;padding:11px;font-weight:800}.tabs2 button.on{background:var(--brand);border-color:var(--brand);color:#fff}.pane2{display:none}.pane2.on{display:block}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}.stat2{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}.stat2 b{display:block;font-size:22px}.stat2 small{color:var(--ink2);font-weight:700}.filters{display:flex;gap:7px;overflow:auto;padding-bottom:4px}.filters button{white-space:nowrap;border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 11px;font-weight:800;color:var(--ink2)}.filters button.on{background:#fbeaec;border-color:#e9bcc1;color:var(--brand)}.roster{display:grid;gap:9px;margin-top:10px}.student{background:#fff;border:1px solid var(--line);border-radius:13px;padding:12px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.student .name{font-weight:800}.student .meta{font-size:11.5px;color:var(--ink2);margin-top:3px}.student .act{display:flex;gap:6px}.student .act button{border:0;border-radius:9px;padding:8px 10px;font-weight:800;cursor:pointer}.pbtn{background:#e7f5ec;color:var(--ok)}.abtn{background:#fdeaea;color:var(--bad)}.searchbox{display:grid;grid-template-columns:1fr auto;gap:8px}.minihead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.livebadge{display:inline-flex;align-items:center;gap:6px;background:#e7f5ec;color:var(--ok);font-size:11px;font-weight:800;padding:5px 9px;border-radius:999px}.livebadge:before{content:'';width:7px;height:7px;background:var(--ok);border-radius:50%}@media(max-width:560px){.wrap{padding:10px}.card{padding:13px;border-radius:12px}.top{padding:11px 12px}.student{grid-template-columns:1fr}.student .act{justify-content:stretch}.student .act button{flex:1}.stats{grid-template-columns:repeat(3,1fr)}#stage{max-height:52vh}.btn{font-size:14px;padding:11px 13px}}
 </style>
 </head>
 <body>
@@ -55,31 +57,44 @@ input:focus,select:focus{border-color:var(--brand)}
     <div class="note" style="margin-top:12px">The PIN is set in Admin (Config → ScanPIN). This scanner runs on your phone/laptop camera and marks attendance instantly.</div>
   </div>
 
-  <!-- SCANNER -->
-  <div class="card" id="scanCard" style="display:none">
-    <label class="fl">Marking attendance for</label>
-    <select id="testSel"></select>
-    <div id="stage" style="margin-top:12px">
-      <video id="vid" playsinline muted></video><canvas id="cv" style="display:none"></canvas>
-      <div id="idle">Camera off<br><span style="font-size:11px">Press Start</span></div>
-      <div id="reticle"></div><div id="laser"></div><div id="flash"></div>
-    </div>
-    <div class="row" style="margin-top:12px">
-      <button class="btn" id="startBtn" onclick="toggleScan()">▶ Start scanning</button>
-      <button class="btn soft" id="torchBtn" onclick="toggleTorch()" style="display:none">🔦 Torch</button>
-      <span class="chip" id="engine">Engine: —</span>
-    </div>
-    <div id="lastHit" style="display:none;margin-top:12px;padding:12px;border-radius:12px;background:#e7f5ec;text-align:center">
-      <div class="big" id="hitName" style="color:var(--ok)"></div>
-      <div class="pill ok" id="hitInfo"></div>
-    </div>
-  </div>
+  <!-- SCANNER + MANUAL ATTENDANCE -->
+  <div id="workArea" style="display:none">
+    <div class="tabs2"><button class="on" id="tabScan" onclick="switchPane('scan')">▣ QR Scanner</button><button id="tabManual" onclick="switchPane('manual')">☑ Manual Attendance</button></div>
 
-  <!-- LIST -->
-  <div class="card" id="listCard" style="display:none">
-    <div class="row" style="justify-content:space-between"><b>Marked this session</b><span class="pill ok" id="count">0</span></div>
-    <div id="list" style="max-height:340px;overflow:auto;margin-top:6px"><div class="empty">Scans appear here instantly.</div></div>
-    <div class="row" style="margin-top:8px"><button class="btn soft sm" onclick="manual()">＋ Manual (type ERP)</button><button class="btn soft sm" onclick="exportCsv()">⬇ Export</button></div>
+    <div class="pane2 on" id="paneScan">
+      <div class="card" id="scanCard">
+        <div class="minihead"><div><label class="fl">Marking attendance for</label></div><span class="livebadge">Scanner ready</span></div>
+        <select id="testSel" onchange="onTestChanged()"></select>
+        <div id="stage" style="margin-top:12px">
+          <video id="vid" playsinline muted></video><canvas id="cv" style="display:none"></canvas>
+          <div id="idle">Camera off<br><span style="font-size:11px">Press Start</span></div>
+          <div id="reticle"></div><div id="laser"></div><div id="flash"></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="startBtn" onclick="toggleScan()">▶ Start scanning</button>
+          <button class="btn soft" id="torchBtn" onclick="toggleTorch()" style="display:none">🔦 Torch</button>
+          <span class="chip" id="engine">Engine: —</span>
+        </div>
+        <div id="lastHit" style="display:none;margin-top:12px;padding:12px;border-radius:12px;background:#e7f5ec;text-align:center">
+          <div class="big" id="hitName" style="color:var(--ok)"></div><div class="pill ok" id="hitInfo"></div>
+        </div>
+      </div>
+      <div class="card" id="listCard">
+        <div class="row" style="justify-content:space-between"><b>Marked this session</b><span class="pill ok" id="count">0</span></div>
+        <div id="list" style="max-height:300px;overflow:auto;margin-top:6px"><div class="empty">Scans appear here instantly.</div></div>
+        <div class="row" style="margin-top:8px"><button class="btn soft sm" onclick="switchPane('manual')">☑ Open manual roster</button><button class="btn soft sm" onclick="exportCsv()">⬇ Export session</button></div>
+      </div>
+    </div>
+
+    <div class="pane2" id="paneManual">
+      <div class="card">
+        <div class="minihead"><div><b style="font-size:16px">Test-wise Manual Attendance</b><div class="hint">Only enrolled students are shown. Tap Present or Absent instantly.</div></div><button class="btn sm soft" onclick="loadRoster(true)">↻ Refresh</button></div>
+        <div class="stats"><div class="stat2"><b id="mTotal">0</b><small>Enrolled</small></div><div class="stat2"><b id="mPresent" style="color:var(--ok)">0</b><small>Present</small></div><div class="stat2"><b id="mAbsent" style="color:var(--bad)">0</b><small>Absent</small></div></div>
+        <div class="searchbox"><input id="mSearch" placeholder="Search ERP / student name" oninput="paintRoster()"><button class="btn sm soft" onclick="document.getElementById('mSearch').value='';paintRoster()">Clear</button></div>
+        <div class="filters" style="margin-top:10px"><button class="on" data-f="ALL" onclick="setFilter(this)">All</button><button data-f="PRESENT" onclick="setFilter(this)">Present</button><button data-f="ABSENT" onclick="setFilter(this)">Absent</button></div>
+        <div id="manualMsg" class="msg" style="color:var(--ink2);margin-top:9px"></div><div class="roster" id="mRoster"><div class="empty">Choose a specific test to load enrolled students.</div></div>
+      </div>
+    </div>
   </div>
 </div>
 <div class="demo" id="demo">DEMO — set your backend URL</div>
@@ -125,8 +140,9 @@ function signIn(){
 
 function startScannerUI(tests){
   $('who').textContent=INVIG;
-  $('pinCard').style.display='none';$('scanCard').style.display='block';$('listCard').style.display='block';
+  $('pinCard').style.display='none';$('workArea').style.display='block';
   $('testSel').innerHTML=tests.map(function(t){return '<option value="'+t.id+'">'+t.title+'</option>';}).join('');
+  if(tests.length>1)$('testSel').selectedIndex=1; onTestChanged();
 }
 
 /* ===== FAST scan engine (native BarcodeDetector + jsQR fallback) ===== */
@@ -175,7 +191,17 @@ function addMark(erp,name,ok,info){ marks.unshift({erp:erp,name:name,ok:ok,info:
 function render(){ $('count').textContent=marks.filter(function(m){return m.ok;}).length;
   $('list').innerHTML=marks.length?marks.map(function(m){return '<div class="mk"><div><b>'+m.erp+'</b> <span style="color:var(--ink2)">'+m.name+'</span></div><div><span style="color:var(--ink2);font-size:12px">'+m.time+'</span> <span class="pill '+(m.ok?'ok':'bad')+'">'+(m.ok?'✓':m.info)+'</span></div></div>';}).join(''):'<div class="empty">Scans appear here instantly.</div>'; }
 function showHit(name,info){ $('lastHit').style.display='block'; $('hitName').textContent=name; $('hitInfo').textContent=info; }
-function manual(){ var e=prompt('Type the ERP to mark present:'); if(e)mark(e.trim()); }
+var roster=[],mFilter='ALL',rosterBusy={};
+function switchPane(p){$('paneScan').classList.toggle('on',p==='scan');$('paneManual').classList.toggle('on',p==='manual');$('tabScan').classList.toggle('on',p==='scan');$('tabManual').classList.toggle('on',p==='manual');if(p==='manual')loadRoster(false);}
+function onTestChanged(){if($('paneManual')&&$('paneManual').classList.contains('on'))loadRoster(false);}
+function setFilter(btn){document.querySelectorAll('.filters button').forEach(function(b){b.classList.remove('on')});btn.classList.add('on');mFilter=btn.dataset.f;paintRoster();}
+function loadRoster(showToast){var id=$('testSel').value;if(!id||id==='MASTER'){$('manualMsg').textContent='Choose a specific test above for manual attendance.';$('mRoster').innerHTML='<div class="empty">Manual roster is test-wise. Select a test instead of Master.</div>';return;} $('manualMsg').textContent='Loading enrolled students…';api({api:'scanRoster',pin:PIN,testId:id}).then(function(r){if(!r||!r.ok){$('manualMsg').textContent=(r&&r.msg)||'Could not load roster';return;}roster=r.rows||[];$('manualMsg').textContent='Live roster • '+INVIG;updateRosterStats();paintRoster();if(showToast)toast('Roster refreshed','ok');}).catch(function(){$('manualMsg').textContent='Network error. Tap Refresh.';});}
+function updateRosterStats(){$('mTotal').textContent=roster.length;$('mPresent').textContent=roster.filter(function(x){return x.attendance==='PRESENT'}).length;$('mAbsent').textContent=roster.filter(function(x){return x.attendance!=='PRESENT'}).length;}
+function paintRoster(){var q=($('mSearch')?$('mSearch').value:'').toLowerCase();var rr=roster.filter(function(x){var ok=!q||(x.erp+' '+x.name+' '+(x.division||'')+' '+(x.spec||'')).toLowerCase().indexOf(q)>=0;if(mFilter==='PRESENT')ok=ok&&x.attendance==='PRESENT';if(mFilter==='ABSENT')ok=ok&&x.attendance!=='PRESENT';return ok;});$('mRoster').innerHTML=rr.length?rr.map(function(x){var busy=!!rosterBusy[x.erp];return '<div class="student"><div><div class="name">'+escH(x.name)+'</div><div class="meta"><b>'+escH(x.erp)+'</b> · '+escH(x.division||'')+(x.spec?' · '+escH(x.spec):'')+' · <span class="pill '+(x.attendance==='PRESENT'?'ok':'bad')+'">'+escH(x.attendance)+'</span></div></div><div class="act"><button class="pbtn" '+(busy?'disabled':'')+' onclick="setAttendance(\''+escH(x.erp)+'\',\'PRESENT\')">✓ Present</button><button class="abtn" '+(busy?'disabled':'')+' onclick="setAttendance(\''+escH(x.erp)+'\',\'ABSENT\')">× Absent</button></div></div>';}).join(''):'<div class="empty">No students match this filter.</div>';}
+function escH(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]});}
+function setAttendance(erp,status){var id=$('testSel').value;if(!id||id==='MASTER')return toast('Select a specific test','bad');rosterBusy[erp]=1;paintRoster();api({api:'scanAttendance',pin:PIN,testId:id,erp:erp,status:status,name:INVIG}).then(function(r){delete rosterBusy[erp];if(!r||!r.ok){paintRoster();toast((r&&r.msg)||'Could not update attendance','bad');return;}roster=r.rows||roster;updateRosterStats();paintRoster();toast(erp+' marked '+status.toLowerCase(),'ok');}).catch(function(){delete rosterBusy[erp];paintRoster();toast('Network error — retry','bad');});}
+function manual(){switchPane('manual');}
+
 function exportCsv(){ if(!marks.length)return toast('Nothing to export','bad'); var csv='ERP,Name,OK,Info,Time\n'+marks.map(function(m){return m.erp+','+m.name+','+m.ok+','+m.info+','+m.time;}).join('\n');
   var b=new Blob([csv],{type:'text/csv'}); var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='attendance_'+Date.now()+'.csv'; a.click(); }
 async function toggleTorch(){ if(!track)return; try{ torchOn=!torchOn; await track.applyConstraints({advanced:[{torch:torchOn}]}); }catch(e){ toast('Torch not supported','bad'); } }
