@@ -151,7 +151,8 @@ function mergeTestOptions(r,initial){
   if(exists && !(prev==='MASTER'&&live.length===1))sel.value=prev; else if(live.length)sel.value=live[0].id; else sel.value='MASTER';
   if(initial||!exists)onTestChanged();
   paintWindowContext(r);
-  if(!live.length && stream && sel.value==='MASTER') stopScan();
+  // Never shut the camera down just because a 10-second context refresh returns no open test.
+  // The camera stays ready; tests appear automatically when their scanner window opens.
 }
 function refreshScannerContext(silent){
   if(DEMO||!PIN)return Promise.resolve();
@@ -160,7 +161,7 @@ function refreshScannerContext(silent){
     lastContext=r;mergeTestOptions(r,false);
   }).catch(function(){if(!silent)toast('Scanner window refresh failed','bad');});
 }
-function startContextRefresh(){clearInterval(contextTimer);contextTimer=setInterval(function(){refreshScannerContext(true);},15000);}
+function startContextRefresh(){clearInterval(contextTimer);var sec=Math.max(5,Math.min(30,Number((lastContext&&lastContext.refreshAfterSec)||10)));contextTimer=setInterval(function(){refreshScannerContext(true);},sec*1000);}
 function signIn(){
   INVIG=$('invig').value.trim()||'Invigilator'; PIN=$('pin').value.trim(); if(!PIN){$('pinMsg').textContent='Enter the attendance PIN.';return;}
   var sb=$('signBtn'); function ready(){sb.disabled=false;sb.textContent='Sign in ▸';}
@@ -178,20 +179,22 @@ function startScannerUI(r){
 }
 
 /* ===== FAST scan engine (native BarcodeDetector + jsQR fallback) ===== */
-var stream=null,raf=null,detector=null,track=null,torchOn=false,last='',lastT=0,lastFrame=0;
-async function toggleScan(){ if(stream){stopScan();return;}
+var stream=null,raf=null,detector=null,track=null,torchOn=false,last='',lastT=0,lastFrame=0,wantScanning=false,wakeLock=null,pendingMarks={};
+async function keepAwake(){try{if('wakeLock' in navigator&&(!wakeLock||wakeLock.released))wakeLock=await navigator.wakeLock.request('screen');}catch(e){}}
+async function toggleScan(){ if(stream){stopScan(true);return;} wantScanning=true; await keepAwake();
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280}}});
     var v=$('vid'); v.srcObject=stream; await v.play(); v.style.display='block'; $('idle').style.display='none';
     $('reticle').style.display='block'; $('laser').style.display='block';
     track=stream.getVideoTracks()[0];
+    track.onended=function(){if(wantScanning){stream=null;setTimeout(function(){if(wantScanning&&!stream)toggleScan();},600);}};
     if(track.getCapabilities&&track.getCapabilities().torch)$('torchBtn').style.display='inline-flex';
     if('BarcodeDetector'in window){ detector=new BarcodeDetector({formats:['qr_code']}); $('engine').textContent='Engine: Native (fast)'; $('engine').className='chip ok'; }
     else { detector=null; $('engine').textContent='Engine: jsQR'; }
     $('startBtn').textContent='⏹ Stop'; loop(); toast('Scanner live','ok');
-  }catch(e){ toast('Camera error: '+e.message,'bad'); stream=null; }
+  }catch(e){ toast('Camera error: '+e.message,'bad'); stream=null; wantScanning=false; }
 }
-function stopScan(){ if(raf)cancelAnimationFrame(raf); if(stream)stream.getTracks().forEach(function(t){t.stop();}); stream=null;detector=null;
+function stopScan(manual){ if(manual!==false)wantScanning=false; if(raf)cancelAnimationFrame(raf); if(stream)stream.getTracks().forEach(function(t){t.onended=null;t.stop();}); stream=null;detector=null;
   $('vid').style.display='none';$('idle').style.display='block';$('reticle').style.display='none';$('laser').style.display='none';$('torchBtn').style.display='none';$('startBtn').textContent='▶ Start scanning'; }
 async function loop(){
   var v=$('vid'); var now=performance.now();
@@ -205,19 +208,26 @@ async function loop(){
   }
   if(stream)raf=requestAnimationFrame(loop);
 }
-function hit(code){ var now=Date.now(); var erp=(String(code).split('|')[0]||code).trim();
-  if(erp===last && now-lastT<2500) return;   // duplicate guard
-  last=erp; lastT=now; mark(erp); }
+function hit(code){ var now=Date.now(),parts=String(code).split('|'),erp=(parts[0]||code).trim(),qrName=(parts[1]||'').trim();
+  if(erp===last && now-lastT<1200) return;   // quick duplicate guard
+  last=erp; lastT=now; mark(erp,qrName); }
 
-function mark(raw){
+function mark(raw,qrName){
   var erp=String(raw).trim().toUpperCase();
+  if(pendingMarks[erp])return;
   if(marks.some(function(m){return m.erp===erp && m.ok;})){ toast(erp+' already marked','warn'); return; }
   var testId=$('testSel').value;
-  if(DEMO){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();addMark(erp,'Demo Student',true,'demo'); return; }
+  if(!testId||testId==='MASTER' && !(lastContext&&lastContext.liveTests&&lastContext.liveTests.length)){toast('No scanner-open test is available yet','warn');return;}
+  if(DEMO){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();addMark(erp,qrName||'Demo Student',true,'demo'); return; }
+  pendingMarks[erp]=1;
+  // Instant visual acknowledgement so faculty know the QR was captured immediately.
+  showHit(qrName||erp,'QR captured • confirming attendance…');
+  var lh=$('lastHit');if(lh){lh.style.background='#fff7df';$('hitName').style.color='var(--gold)';}
   api({api:'scanMark',pin:PIN,testId:testId,erp:erp,name:INVIG}).then(function(r){
-    if(r&&r.ok){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();var info=(r.marked?((r.marked||0)+' marked'):(r.already?'Already present':'Present'));addMark(erp,r.name||erp,true,info); showHit(r.name||erp,(r.spec||'')+' · '+info); }
-    else { addMark(erp,(r&&r.name)||erp,false,(r&&r.msg)||'rejected'); toast((r&&r.msg)||'Rejected','bad'); }
-  }).catch(function(){ addMark(erp,erp,false,'network'); toast('Network error','bad'); });
+    delete pendingMarks[erp];
+    if(r&&r.ok){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();var info=(r.marked?((r.marked||0)+' marked'):(r.already?'Already present':'Present'));addMark(erp,r.name||qrName||erp,true,info); showHit(r.name||qrName||erp,(r.spec||'')+' · '+info);if(lh){lh.style.background='#e7f5ec';$('hitName').style.color='var(--ok)';} }
+    else { addMark(erp,(r&&r.name)||qrName||erp,false,(r&&r.msg)||'rejected');if(lh){lh.style.background='#fdeaea';$('hitName').style.color='var(--bad)';}toast((r&&r.msg)||'Rejected','bad'); }
+  }).catch(function(){ delete pendingMarks[erp];addMark(erp,qrName||erp,false,'network');if(lh){lh.style.background='#fdeaea';$('hitName').style.color='var(--bad)';}toast('Network error — scan again','bad'); });
 }
 function addMark(erp,name,ok,info){ marks.unshift({erp:erp,name:name,ok:ok,info:info,time:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}); render(); }
 function render(){ $('count').textContent=marks.filter(function(m){return m.ok;}).length;
@@ -238,6 +248,10 @@ function exportCsv(){ if(!marks.length)return toast('Nothing to export','bad'); 
   var b=new Blob([csv],{type:'text/csv'}); var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='attendance_'+Date.now()+'.csv'; a.click(); }
 async function toggleTorch(){ if(!track)return; try{ torchOn=!torchOn; await track.applyConstraints({advanced:[{torch:torchOn}]}); }catch(e){ toast('Torch not supported','bad'); } }
 function flash(){ var f=$('flash'); f.style.opacity=.6; setTimeout(function(){f.style.opacity=0;},130); }
+
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&wantScanning)keepAwake();});
+window.addEventListener('beforeunload',function(){try{if(wakeLock&&!wakeLock.released)wakeLock.release();}catch(e){}});
+
 var actx; function beep(){ try{ actx=actx||new(window.AudioContext||webkitAudioContext)(); var o=actx.createOscillator(),g=actx.createGain(); o.connect(g); g.connect(actx.destination); o.frequency.value=1040; g.gain.value=.06; o.start(); setTimeout(function(){o.stop();},70); }catch(e){} }
 </script>
 </body>
