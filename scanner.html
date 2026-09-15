@@ -42,6 +42,8 @@ input:focus,select:focus{border-color:var(--brand)}
 .toast.ok{background:#177245}.toast.bad{background:#b3323b}.toast.warn{background:#a5701a}
 
 .tabs2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.tabs2 button{border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:10px;padding:11px;font-weight:800}.tabs2 button.on{background:var(--brand);border-color:var(--brand);color:#fff}.pane2{display:none}.pane2.on{display:block}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}.stat2{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}.stat2 b{display:block;font-size:22px}.stat2 small{color:var(--ink2);font-weight:700}.filters{display:flex;gap:7px;overflow:auto;padding-bottom:4px}.filters button{white-space:nowrap;border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 11px;font-weight:800;color:var(--ink2)}.filters button.on{background:#fbeaec;border-color:#e9bcc1;color:var(--brand)}.roster{display:grid;gap:9px;margin-top:10px}.student{background:#fff;border:1px solid var(--line);border-radius:13px;padding:12px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.student .name{font-weight:800}.student .meta{font-size:11.5px;color:var(--ink2);margin-top:3px}.student .act{display:flex;gap:6px}.student .act button{border:0;border-radius:9px;padding:8px 10px;font-weight:800;cursor:pointer}.pbtn{background:#e7f5ec;color:var(--ok)}.abtn{background:#fdeaea;color:var(--bad)}.searchbox{display:grid;grid-template-columns:1fr auto;gap:8px}.minihead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.livebadge{display:inline-flex;align-items:center;gap:6px;background:#e7f5ec;color:var(--ok);font-size:11px;font-weight:800;padding:5px 9px;border-radius:999px}.livebadge:before{content:'';width:7px;height:7px;background:var(--ok);border-radius:50%}@media(max-width:560px){.wrap{padding:10px}.card{padding:13px;border-radius:12px}.top{padding:11px 12px}.student{grid-template-columns:1fr}.student .act{justify-content:stretch}.student .act button{flex:1}.stats{grid-template-columns:repeat(3,1fr)}#stage{max-height:52vh}.btn{font-size:14px;padding:11px 13px}}
+
+.windowbar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:linear-gradient(135deg,#fff8ec,#fff);border:1px solid #efd6a5;border-radius:13px;padding:11px 12px;margin-bottom:12px}.windowbar .left{min-width:0}.windowbar b{display:block;font-size:13px}.windowbar small{display:block;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.windowbar .state{flex:none;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:800;background:#f1ece5;color:var(--ink2)}.windowbar .state.ok{background:#e7f5ec;color:var(--ok)}.windowbar .state.wait{background:#fff2d8;color:#8d6200}.pulseDot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:5px;box-shadow:0 0 0 4px rgba(31,122,69,.10)}
 </style>
 </head>
 <body>
@@ -60,6 +62,7 @@ input:focus,select:focus{border-color:var(--brand)}
   <!-- SCANNER + MANUAL ATTENDANCE -->
   <div id="workArea" style="display:none">
     <div class="tabs2"><button class="on" id="tabScan" onclick="switchPane('scan')">▣ QR Scanner</button><button id="tabManual" onclick="switchPane('manual')">☑ Manual Attendance</button></div>
+    <div class="windowbar" id="windowBar"><div class="left"><b id="windowTitle">Checking scanner window…</b><small id="windowSub">Available tests refresh automatically.</small></div><span class="state" id="windowState">SYNC</span></div>
 
     <div class="pane2 on" id="paneScan">
       <div class="card" id="scanCard">
@@ -124,25 +127,54 @@ function api(params){ return apiOnce(params,25000).catch(function(){return apiOn
 function $(id){return document.getElementById(id);}
 function toast(m,t){var d=document.createElement('div');d.className='toast'+(t?' '+t:'');d.textContent=m;$('toast').appendChild(d);setTimeout(function(){d.remove();},2400);}
 
-var PIN='', INVIG='', marks=[];
+var PIN='', INVIG='', marks=[],contextTimer=null,lastContext=null;
+function fmtWindowTime(iso){if(!iso)return '—';try{return new Date(iso).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return '—';}}
+function paintWindowContext(r){
+  lastContext=r||lastContext||{};
+  var tests=(lastContext.liveTests||[]),bar=$('windowBar'),st=$('windowState'),ttl=$('windowTitle'),sub=$('windowSub');
+  if(tests.length){
+    ttl.textContent=tests.length===1?tests[0].title:(tests.length+' tests ready for attendance');
+    sub.textContent='Scanner window active now • list refreshes automatically every '+(lastContext.refreshAfterSec||15)+' sec';
+    st.innerHTML='<span class="pulseDot"></span>OPEN';st.className='state ok';
+  }else if(lastContext.nextTest){
+    ttl.textContent='No test is open for scanning yet';
+    sub.textContent='Next: '+lastContext.nextTest.title+' • opens '+fmtWindowTime(lastContext.nextTest.openAt);
+    st.textContent='UPCOMING';st.className='state wait';
+  }else{
+    ttl.textContent='No scanner window is active';sub.textContent='Tests appear automatically only inside the admin-defined scanner window.';st.textContent='CLOSED';st.className='state';
+  }
+}
+function mergeTestOptions(r,initial){
+  var sel=$('testSel'),prev=sel.value,live=(r.liveTests||[]),tests=[{id:'MASTER',title:'Master — all scanner-open tests'}].concat(live.map(function(t){return {id:t.id,title:t.title};}));
+  sel.innerHTML=tests.map(function(t){return '<option value="'+escH(t.id)+'">'+escH(t.title)+'</option>';}).join('');
+  var exists=tests.some(function(t){return t.id===prev;});
+  if(exists && !(prev==='MASTER'&&live.length===1))sel.value=prev; else if(live.length)sel.value=live[0].id; else sel.value='MASTER';
+  if(initial||!exists)onTestChanged();
+  paintWindowContext(r);
+  if(!live.length && stream && sel.value==='MASTER') stopScan();
+}
+function refreshScannerContext(silent){
+  if(DEMO||!PIN)return Promise.resolve();
+  return api({api:'scanContext',pin:PIN}).then(function(r){
+    if(!r||!r.ok){if(!silent)toast((r&&r.msg)||'Could not refresh scanner window','bad');return;}
+    lastContext=r;mergeTestOptions(r,false);
+  }).catch(function(){if(!silent)toast('Scanner window refresh failed','bad');});
+}
+function startContextRefresh(){clearInterval(contextTimer);contextTimer=setInterval(function(){refreshScannerContext(true);},15000);}
 function signIn(){
   INVIG=$('invig').value.trim()||'Invigilator'; PIN=$('pin').value.trim(); if(!PIN){$('pinMsg').textContent='Enter the attendance PIN.';return;}
   var sb=$('signBtn'); function ready(){sb.disabled=false;sb.textContent='Sign in ▸';}
   $('pinMsg').textContent='Connecting securely…'; $('pinMsg').style.color='var(--ink2)';sb.disabled=true;sb.textContent='Connecting…';
-  if(DEMO){ready();startScannerUI([{id:'MASTER',title:'Master (all scanner-open tests)'}]);return;}
+  if(DEMO){ready();startScannerUI({liveTests:[],nextTest:null,refreshAfterSec:15});return;}
   api({api:'scanContext',pin:PIN}).then(function(r){
     if(!r||!r.ok){ready();var reason=(r&&r.reason)||'pin';var message=(reason==='pin'||reason==='missing-pin')?'Incorrect attendance PIN.':reason==='not-configured'?'Attendance PIN is not configured in Admin.':((r&&r.msg)||'Scanner service is temporarily unavailable. Please retry.');$('pinMsg').style.color='var(--bad)';$('pinMsg').textContent=message;return;}
-    $('pinMsg').textContent='';
-    var tests=[{id:'MASTER',title:'Master — all scanner-open tests'}].concat((r.liveTests||[]).map(function(t){return {id:t.id,title:t.title};}));
-    startScannerUI(tests);
+    $('pinMsg').textContent='';lastContext=r;startScannerUI(r);startContextRefresh();
   }).catch(function(){ready();$('pinMsg').style.color='var(--bad)';$('pinMsg').textContent='Server did not respond after two attempts. Check internet and retry.';});
 }
-
-function startScannerUI(tests){
+function startScannerUI(r){
   $('who').textContent=INVIG;
   $('pinCard').style.display='none';$('workArea').style.display='block';
-  $('testSel').innerHTML=tests.map(function(t){return '<option value="'+t.id+'">'+t.title+'</option>';}).join('');
-  if(tests.length>1)$('testSel').selectedIndex=1; onTestChanged();
+  mergeTestOptions(r||{liveTests:[]},true);
 }
 
 /* ===== FAST scan engine (native BarcodeDetector + jsQR fallback) ===== */
@@ -163,7 +195,7 @@ function stopScan(){ if(raf)cancelAnimationFrame(raf); if(stream)stream.getTrack
   $('vid').style.display='none';$('idle').style.display='block';$('reticle').style.display='none';$('laser').style.display='none';$('torchBtn').style.display='none';$('startBtn').textContent='▶ Start scanning'; }
 async function loop(){
   var v=$('vid'); var now=performance.now();
-  if(now-lastFrame>=60){ lastFrame=now;   // ~16 fps analysis — snappy, low CPU
+  if(now-lastFrame>=45){ lastFrame=now;   // ~22 fps analysis — fast while staying camera-friendly
     try{ var code=null;
       if(detector){ var c=await detector.detect(v); if(c.length)code=c[0].rawValue; }
       else { var cv=$('cv'); cv.width=v.videoWidth; cv.height=v.videoHeight; var ctx=cv.getContext('2d'); ctx.drawImage(v,0,0,cv.width,cv.height);
@@ -183,7 +215,7 @@ function mark(raw){
   var testId=$('testSel').value;
   if(DEMO){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();addMark(erp,'Demo Student',true,'demo'); return; }
   api({api:'scanMark',pin:PIN,testId:testId,erp:erp,name:INVIG}).then(function(r){
-    if(r&&r.ok){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();addMark(erp,r.name||erp,true,(r.marked||0)+' test(s)'); showHit(r.name||erp,(r.spec||'')+' · '+(r.marked||0)+' marked'); }
+    if(r&&r.ok){ beep();if(navigator.vibrate)navigator.vibrate(60);flash();var info=(r.marked?((r.marked||0)+' marked'):(r.already?'Already present':'Present'));addMark(erp,r.name||erp,true,info); showHit(r.name||erp,(r.spec||'')+' · '+info); }
     else { addMark(erp,(r&&r.name)||erp,false,(r&&r.msg)||'rejected'); toast((r&&r.msg)||'Rejected','bad'); }
   }).catch(function(){ addMark(erp,erp,false,'network'); toast('Network error','bad'); });
 }
