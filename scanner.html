@@ -403,27 +403,34 @@ function jsonp(params,timeout){return new Promise(function(resolve,reject){
   s.onerror=function(){finish();reject(new Error('network'))};document.head.appendChild(s);
 })}
 
-/* ---------- service status / pre-warm ---------- */
+/* ---------- service status / instant pre-warm ---------- */
 function svcState(state,txt){$('svcDot').className='dot '+state;$('svcTxt').textContent=txt}
-var SERVICE_WARM=null;
+var SERVICE_WARM=null,SERVICE_READY=false;
 function sleep(ms){return new Promise(function(resolve){setTimeout(resolve,ms)})}
-function checkService(force){
+
+function warmService(force){
   if(SERVICE_WARM&&!force)return SERVICE_WARM;
   svcState('warn','Preparing scanner service…');
   SERVICE_WARM=(async function(){
-    var waits=[0,500,1100];
+    var waits=[0,700];
     for(var i=0;i<waits.length;i++){
       if(waits[i])await sleep(waits[i]);
       try{
-        var r=await jsonp({action:'health'},15000);
-        if(r&&r.ok){svcState('ok','Scanner service ready'+(r.version?' · v'+r.version:''));return true}
+        var r=await jsonp({action:'warm'},26000);
+        if(r&&r.ok){
+          SERVICE_READY=true;
+          svcState('ok','Scanner ready'+(r.liveTests!=null?' · '+r.liveTests+' open':''));
+          return true;
+        }
       }catch(e){}
     }
-    svcState('bad','Scanner service is taking longer than expected');
+    SERVICE_READY=false;
+    svcState('warn','Scanner is waking up — you can still connect');
     return false;
   })();
   return SERVICE_WARM;
 }
+
 function setNet(state,txt){var n=$('net');n.className='net'+(state==='ok'?'':' '+state);$('netTxt').textContent=txt}
 
 /* ---------- LOGIN ---------- */
@@ -435,60 +442,73 @@ $('signin').onclick=signIn;
 function loginMsg(t,type){var m=$('loginMsg');m.textContent=t||'';m.className='lg-msg'+(type?' '+type:'')}
 function busyBtn(on,txt){var b=$('signin');b.disabled=on;b.innerHTML=on?'<span class="spin"></span><span>'+H(txt||'Connecting…')+'</span>':'<span>Connect scanner</span>'}
 
-async function contextWithRetry(pin){
-  var waits=[0,650,1500];
-  var last=null;
-  for(var i=0;i<waits.length;i++){
-    if(waits[i])await sleep(waits[i]);
-    try{
-      var r=await jsonp({action:'context',pin:pin},22000);
-      if(r&&r.ok)return r;
-      if(r&&(r.reason==='pin'||r.reason==='not-configured'))return r;
-      last=r;
-    }catch(e){last=e}
-    SERVICE_WARM=null;
-    await checkService(true);
-  }
-  if(last&&last.ok===false)return last;
-  throw (last instanceof Error?last:new Error('network'));
+/* First context attempt starts immediately. It does NOT wait for a separate health call.
+   If Apps Script is still cold, the already-running page-load warm request prepares it
+   and we retry once against the warmed cache. */
+async function contextFast(pin){
+  var firstErr=null;
+  try{
+    var r=await jsonp({action:'context',pin:pin},14000);
+    if(r&&(r.ok||r.reason==='pin'||r.reason==='not-configured'))return r;
+    firstErr=r;
+  }catch(e){firstErr=e}
+
+  loginMsg('Scanner is waking up… one moment.');
+  try{await warmService(false)}catch(e){}
+
+  try{
+    var r2=await jsonp({action:'context',pin:pin},22000);
+    if(r2)return r2;
+  }catch(e2){firstErr=e2}
+
+  // One final short retry handles mobile-network handoff / Apps Script redirect delays.
+  await sleep(900);
+  try{return await jsonp({action:'context',pin:pin},18000)}
+  catch(e3){throw (e3||firstErr||new Error('network'))}
 }
 
 async function signIn(silent){
   unlockAudio();
   var name=$('invig').value.trim()||'Invigilator',pin=$('pin').value.trim();
   if(!pin){loginMsg('Enter the attendance PIN.','bad');$('pin').focus();return}
-  busyBtn(true,'Preparing scanner…');loginMsg('Connecting securely to PS Kavach…');
+
+  busyBtn(true,'Connecting scanner…');
+  loginMsg(SERVICE_READY?'Loading attendance windows…':'Connecting securely to PS Kavach…');
+
   try{
-    await checkService(false); // warm first; even if health is slow, context retry below continues
-    busyBtn(true,'Loading attendance windows…');
-    var r=await contextWithRetry(pin);
+    var r=await contextFast(pin);
     if(!r||!r.ok){
       busyBtn(false);
       var why=r&&r.reason;
-      loginMsg(why==='pin'?'Incorrect attendance PIN.':why==='not-configured'?'ScanPIN is not set in the Config sheet.':((r&&r.msg)||'Could not connect.'),'bad');
-      sessionStorage.removeItem('PSK_SCN_PIN');return;
+      loginMsg(
+        why==='pin'?'Incorrect attendance PIN.':
+        why==='not-configured'?'ScanPIN is not set in the Config sheet.':
+        ((r&&r.msg)||'Could not connect to scanner service.'),
+        'bad'
+      );
+      sessionStorage.removeItem('PSK_SCN_PIN');
+      return;
     }
-    PIN=pin;INVIG=name;localStorage.setItem('PSK_SCN_NAME',name);sessionStorage.setItem('PSK_SCN_PIN',pin);
-    CTX=r;busyBtn(false);enterApp();
+
+    SERVICE_READY=true;
+    svcState('ok','Scanner service ready');
+    PIN=pin;INVIG=name;
+    localStorage.setItem('PSK_SCN_NAME',name);
+    sessionStorage.setItem('PSK_SCN_PIN',pin);
+    CTX=r;
+    busyBtn(false);
+    enterApp();
+
   }catch(e){
     busyBtn(false);
-    loginMsg('Scanner service did not respond yet. Please tap Connect once more.','bad');
+    SERVICE_WARM=null;SERVICE_READY=false;
+    svcState('warn','Scanner service is waking up');
+    loginMsg('Scanner service is taking longer than normal. Tap Connect once more — no setup change is needed.','bad');
+    // Keep warming in background for the next tap.
+    warmService(true);
   }
 }
-function enterApp(){
-  $('login').classList.add('hidden');$('app').classList.remove('hidden');
-  $('hello').textContent=INVIG;setNet('ok','Online');
-  applyContext(CTX);loadPack(true);startTimers();syncQueue();
-  startCam();
-}
-$('logout').onclick=function(){
-  stopCam(false);clearInterval(timers.ctx);clearInterval(timers.sync);clearInterval(timers.pack);
-  sessionStorage.removeItem('PSK_SCN_PIN');PIN='';$('pin').value='';
-  $('app').classList.add('hidden');$('login').classList.remove('hidden');loginMsg('Signed out.','ok');
-};
 
-/* Scanner backend is administrator-locked in this build. */
-$('setup').classList.add('hidden');
 /* ---------- CONTEXT ---------- */
 function startTimers(){
   clearInterval(timers.ctx);clearInterval(timers.sync);clearInterval(timers.pack);
@@ -819,11 +839,13 @@ function setAttendance(erp,status){
 }
 
 /* ---------- start ---------- */
-checkService(false).finally(function(){
+/* Start warming immediately, but never block the login screen or keyboard. */
+warmService(false);
+setTimeout(function(){
   var saved=sessionStorage.getItem('PSK_SCN_PIN');
   if(saved){$('pin').value=saved;signIn(true)}
-  else setTimeout(function(){($('invig').value?$('pin'):$('invig')).focus()},120);
-});
+  else ($('invig').value?$('pin'):$('invig')).focus();
+},140);
 paintStats();
 window.addEventListener('pagehide',function(){stopCam(false)});
 })();
