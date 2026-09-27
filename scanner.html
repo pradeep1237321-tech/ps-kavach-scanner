@@ -345,7 +345,7 @@ button{cursor:pointer}
 var DEFAULT_SERVICE='https://script.google.com/macros/s/AKfycbw2jQqbjHqCSU_gKs-zzDIhPOeKtxh2b3IWb3j4-ZGB76_QiXQySxVSHO1ukzYcjSAJPw/exec';
 var ZXING_URL='https://cdn.jsdelivr.net/npm/barcode-detector@3.2.2/dist/iife/ponyfill.js';
 var JSQR_URL='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
-var SERVICE_URL=DEFAULT_SERVICE; try{localStorage.removeItem('PS_POWER_SCANNER_SERVICE')}catch(e){}
+var SERVICE_URL=DEFAULT_SERVICE; try{localStorage.removeItem('PS_POWER_SCANNER_SERVICE');localStorage.removeItem('PS_POWER_SCANNER_URL')}catch(e){}
 var IS_ADMIN=false;
 var IS_MOBILE=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Macintosh/.test(navigator.userAgent));
 
@@ -417,21 +417,24 @@ $('signin').onclick=signIn;
 function loginMsg(t,type){var m=$('loginMsg');m.textContent=t||'';m.className='lg-msg'+(type?' '+type:'')}
 function busyBtn(on,txt){var b=$('signin');b.disabled=on;b.innerHTML=on?'<span class="spin"></span><span>'+H(txt||'Connecting…')+'</span>':'<span>Connect scanner</span>'}
 
-/* One request only. If a mobile network/App Script redirect is slow, retry once.
-   No simultaneous warm + context requests. */
-async function loginRequest(pin){
-  var firstErr=null;
-  try{
-    var r=await jsonp({action:'login',pin:pin},22000);
-    if(r)return r;
-  }catch(e){firstErr=e}
+/* Existing v2 service route only: action=context.
+   No health call. No warm call. No new server endpoint. */
+async function contextStable(pin){
+  var timeouts=[18000,24000];
+  var waits=[0,1000];
+  var last=null;
 
-  await sleep(900);
-  try{
-    return await jsonp({action:'login',pin:pin},26000);
-  }catch(e2){
-    throw (e2||firstErr||new Error('network'));
+  for(var i=0;i<timeouts.length;i++){
+    if(waits[i])await sleep(waits[i]);
+    try{
+      var r=await jsonp({action:'context',pin:pin},timeouts[i]);
+      if(r&&(r.ok||r.reason==='pin'||r.reason==='not-configured'))return r;
+      last=r;
+    }catch(e){last=e}
   }
+
+  if(last&&last.ok===false)return last;
+  throw (last instanceof Error?last:new Error('network'));
 }
 
 async function signIn(silent){
@@ -444,7 +447,7 @@ async function signIn(silent){
   loginMsg('Connecting securely to PS Kavach…');
 
   try{
-    var r=await loginRequest(pin);
+    var r=await contextStable(pin);
 
     if(!r||!r.ok){
       busyBtn(false);
@@ -472,7 +475,7 @@ async function signIn(silent){
   }catch(e){
     busyBtn(false);
     svcState('bad','Connection failed');
-    loginMsg('No connection to the scanner service. Check internet and tap Connect again.','bad');
+    loginMsg('Scanner service did not respond. Tap Connect once more.','bad');
   }
 }
 
@@ -806,17 +809,12 @@ function setAttendance(erp,status){
 }
 
 /* ---------- start ---------- */
-/* No Apps Script request is made before the invigilator presses Connect.
-   This avoids cold-start races and makes laptop/phone behavior identical. */
+/* No background Apps Script request. The scanner connects only when needed. */
 svcState('warn','Ready to connect');
 setTimeout(function(){
   var saved=sessionStorage.getItem('PSK_SCN_PIN');
-  if(saved){
-    $('pin').value=saved;
-    signIn(true);
-  }else{
-    ($('invig').value?$('pin'):$('invig')).focus();
-  }
+  if(saved){$('pin').value=saved;signIn(true)}
+  else ($('invig').value?$('pin'):$('invig')).focus();
 },120);
 paintStats();
 window.addEventListener('pagehide',function(){stopCam(false)});
