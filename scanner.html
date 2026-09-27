@@ -403,34 +403,9 @@ function jsonp(params,timeout){return new Promise(function(resolve,reject){
   s.onerror=function(){finish();reject(new Error('network'))};document.head.appendChild(s);
 })}
 
-/* ---------- service status / instant pre-warm ---------- */
+/* ---------- service status ---------- */
 function svcState(state,txt){$('svcDot').className='dot '+state;$('svcTxt').textContent=txt}
-var SERVICE_WARM=null,SERVICE_READY=false;
 function sleep(ms){return new Promise(function(resolve){setTimeout(resolve,ms)})}
-
-function warmService(force){
-  if(SERVICE_WARM&&!force)return SERVICE_WARM;
-  svcState('warn','Preparing scanner service…');
-  SERVICE_WARM=(async function(){
-    var waits=[0,700];
-    for(var i=0;i<waits.length;i++){
-      if(waits[i])await sleep(waits[i]);
-      try{
-        var r=await jsonp({action:'warm'},26000);
-        if(r&&r.ok){
-          SERVICE_READY=true;
-          svcState('ok','Scanner ready'+(r.liveTests!=null?' · '+r.liveTests+' open':''));
-          return true;
-        }
-      }catch(e){}
-    }
-    SERVICE_READY=false;
-    svcState('warn','Scanner is waking up — you can still connect');
-    return false;
-  })();
-  return SERVICE_WARM;
-}
-
 function setNet(state,txt){var n=$('net');n.className='net'+(state==='ok'?'':' '+state);$('netTxt').textContent=txt}
 
 /* ---------- LOGIN ---------- */
@@ -442,29 +417,21 @@ $('signin').onclick=signIn;
 function loginMsg(t,type){var m=$('loginMsg');m.textContent=t||'';m.className='lg-msg'+(type?' '+type:'')}
 function busyBtn(on,txt){var b=$('signin');b.disabled=on;b.innerHTML=on?'<span class="spin"></span><span>'+H(txt||'Connecting…')+'</span>':'<span>Connect scanner</span>'}
 
-/* First context attempt starts immediately. It does NOT wait for a separate health call.
-   If Apps Script is still cold, the already-running page-load warm request prepares it
-   and we retry once against the warmed cache. */
-async function contextFast(pin){
+/* One request only. If a mobile network/App Script redirect is slow, retry once.
+   No simultaneous warm + context requests. */
+async function loginRequest(pin){
   var firstErr=null;
   try{
-    var r=await jsonp({action:'context',pin:pin},14000);
-    if(r&&(r.ok||r.reason==='pin'||r.reason==='not-configured'))return r;
-    firstErr=r;
+    var r=await jsonp({action:'login',pin:pin},22000);
+    if(r)return r;
   }catch(e){firstErr=e}
 
-  loginMsg('Scanner is waking up… one moment.');
-  try{await warmService(false)}catch(e){}
-
-  try{
-    var r2=await jsonp({action:'context',pin:pin},22000);
-    if(r2)return r2;
-  }catch(e2){firstErr=e2}
-
-  // One final short retry handles mobile-network handoff / Apps Script redirect delays.
   await sleep(900);
-  try{return await jsonp({action:'context',pin:pin},18000)}
-  catch(e3){throw (e3||firstErr||new Error('network'))}
+  try{
+    return await jsonp({action:'login',pin:pin},26000);
+  }catch(e2){
+    throw (e2||firstErr||new Error('network'));
+  }
 }
 
 async function signIn(silent){
@@ -473,12 +440,15 @@ async function signIn(silent){
   if(!pin){loginMsg('Enter the attendance PIN.','bad');$('pin').focus();return}
 
   busyBtn(true,'Connecting scanner…');
-  loginMsg(SERVICE_READY?'Loading attendance windows…':'Connecting securely to PS Kavach…');
+  svcState('warn','Connecting…');
+  loginMsg('Connecting securely to PS Kavach…');
 
   try{
-    var r=await contextFast(pin);
+    var r=await loginRequest(pin);
+
     if(!r||!r.ok){
       busyBtn(false);
+      svcState('bad','Not connected');
       var why=r&&r.reason;
       loginMsg(
         why==='pin'?'Incorrect attendance PIN.':
@@ -490,22 +460,19 @@ async function signIn(silent){
       return;
     }
 
-    SERVICE_READY=true;
-    svcState('ok','Scanner service ready');
-    PIN=pin;INVIG=name;
+    PIN=pin;INVIG=name;CTX=r;
     localStorage.setItem('PSK_SCN_NAME',name);
     sessionStorage.setItem('PSK_SCN_PIN',pin);
-    CTX=r;
+
+    svcState('ok','Scanner service ready');
     busyBtn(false);
+    loginMsg('');
     enterApp();
 
   }catch(e){
     busyBtn(false);
-    SERVICE_WARM=null;SERVICE_READY=false;
-    svcState('warn','Scanner service is waking up');
-    loginMsg('Scanner service is taking longer than normal. Tap Connect once more — no setup change is needed.','bad');
-    // Keep warming in background for the next tap.
-    warmService(true);
+    svcState('bad','Connection failed');
+    loginMsg('No connection to the scanner service. Check internet and tap Connect again.','bad');
   }
 }
 
@@ -839,13 +806,18 @@ function setAttendance(erp,status){
 }
 
 /* ---------- start ---------- */
-/* Start warming immediately, but never block the login screen or keyboard. */
-warmService(false);
+/* No Apps Script request is made before the invigilator presses Connect.
+   This avoids cold-start races and makes laptop/phone behavior identical. */
+svcState('warn','Ready to connect');
 setTimeout(function(){
   var saved=sessionStorage.getItem('PSK_SCN_PIN');
-  if(saved){$('pin').value=saved;signIn(true)}
-  else ($('invig').value?$('pin'):$('invig')).focus();
-},140);
+  if(saved){
+    $('pin').value=saved;
+    signIn(true);
+  }else{
+    ($('invig').value?$('pin'):$('invig')).focus();
+  }
+},120);
 paintStats();
 window.addEventListener('pagehide',function(){stopCam(false)});
 })();
